@@ -3,8 +3,8 @@ import lightning as L
 
 from torch.utils.data import DataLoader
 
-from src.data_set.structure_embedding_dataset import StructureEmbeddingDataset
-from src.data_set.tm_score_dataset import TmScoreDataset
+from src.dataset.structure_embedding_dataset import StructureEmbeddingDataset
+from src.dataset.tm_score_dataset import TmScoreDataset
 from src.lightning_module.lightning_embedding import LitStructureEmbedding
 from src.networks.transformer_nn import TransformerEmbeddingCosine
 from src.params.structure_embedding_params import StructureEmbeddingParams

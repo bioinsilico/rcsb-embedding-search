@@ -3,7 +3,7 @@ import lightning as L
 
 from torch.utils.data import WeightedRandomSampler, DataLoader
 
-from src.data_set.structure_embedding_dataset import StructureEmbeddingDataset
+from src.dataset.structure_embedding_dataset import StructureEmbeddingDataset
 from src.lightning_module.lightning_embedding import LitStructureEmbedding
 from src.networks.transformer_nn import TransformerEmbeddingCosine
 from src.params.structure_embedding_params import StructureEmbeddingParams
@@ -29,9 +29,9 @@ if __name__ == '__main__':
 
     params = StructureEmbeddingParams(args)
 
-    cath_classes = f"{params.class_path}/resources/cath.tsv"
+    cath_classes = f"{params.class_path}/cath.tsv"
     cath_embedding = f"{params.embedding_path}/cath/embedding"
-    ecod_classes = f"{params.class_path}/resources/ecod.tsv"
+    ecod_classes = f"{params.class_path}/ecod.tsv"
     ecod_embedding = f"{params.embedding_path}/ecod/embedding"
 
     training_set = StructureEmbeddingDataset(cath_classes, cath_embedding)
