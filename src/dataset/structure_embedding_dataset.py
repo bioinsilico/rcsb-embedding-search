@@ -5,8 +5,26 @@ import numpy as np
 d_type = np.float32
 
 
+def class_match_score(class_i, class_j):
+    r_i = class_i.split(".")
+    r_j = class_j.split(".")
+    if r_i[0] != r_j[0]:
+        return 0.
+    if r_i[1] != r_j[1]:
+        return 0.25
+    if r_i[2] != r_j[2]:
+        return 0.5
+    if r_i[3] != r_j[3]:
+        return 0.75
+    return 1
+
+
+def class_strict_match(class_i, class_j):
+    return 1. if class_i == class_j else 0.
+
+
 class StructureEmbeddingDataset(Dataset):
-    def __init__(self, class_file, embedding_path):
+    def __init__(self, class_file, embedding_path, match_score=class_strict_match):
         self.classes = {}
         self.embedding = {}
         self.class_pairs = list()
@@ -15,6 +33,7 @@ class StructureEmbeddingDataset(Dataset):
         self.load_classes(class_file)
         self.load_class_pairs()
         self.load_embedding(embedding_path)
+        self.match_score = match_score
 
     def load_classes(self, class_file):
         for pdb_class in open(class_file, "r"):
@@ -26,7 +45,7 @@ class StructureEmbeddingDataset(Dataset):
         for i in range(len(domains)):
             for j in range(i + 1, len(domains)):
                 self.class_pairs.append([
-                    1. if self.classes[domains[i]] == self.classes[domains[j]] else 0.,
+                    self.match_score(self.classes[domains[i]], self.classes[domains[j]]),
                     domains[i],
                     domains[j]
                 ])
