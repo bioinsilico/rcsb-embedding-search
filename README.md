@@ -3,7 +3,7 @@
 This repository contains the scripts to train a neural network model for Protein Structure Search based on protein-level embeddings.
 
 ## Protein Encoding
-Our model ingest protein residue-level embeddings computed with a structural aware protein language model available in this [repo](https://github.com/BorgwardtLab/PST).
+Our model ingests protein residue-level embeddings computed with a structural aware protein language model available in this [repo](https://github.com/BorgwardtLab/PST).
 
 ## Training and Testing Datasets
 Training and testing the model was achieved using the same datasets described in this [publication](https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1007970).
