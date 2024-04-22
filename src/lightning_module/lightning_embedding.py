@@ -20,7 +20,7 @@ class LitStructureEmbedding(L.LightningModule):
         self.z_pred = []
 
     def on_train_start(self):
-        if self.params:
+        if self.params and hasattr(self.logger.experiment, 'add_text'):
             self.logger.experiment.add_text(
                 "Description",
                 '\n'.join([
@@ -30,7 +30,8 @@ class LitStructureEmbedding(L.LightningModule):
                     "feed-forward: %s  ",
                     "hidden-layer: %s  ",
                     "num-layers: %s  ",
-                    "n-head: %s  "
+                    "n-head: %s  ",
+                    "metadata: %s "
                 ])
                 % (
                     self.params.batch_size,
@@ -39,13 +40,14 @@ class LitStructureEmbedding(L.LightningModule):
                     self.params.dim_feedforward,
                     self.params.hidden_layer,
                     self.params.num_layers,
-                    self.params.nhead
+                    self.params.nhead,
+                    self.params.metadata if hasattr(self.params, 'metadata') else "None"
                 )
             )
 
     def training_step(self, batch, batch_idx):
-        x, y, z = batch
-        z_pred = self.model(x, y)
+        (x, x_mask), (y, y_mask), z = batch
+        z_pred = self.model(x, x_mask, y, y_mask)
         self.z.append(z)
         self.z_pred.append(z_pred)
         return nn.functional.mse_loss(z_pred, z)
@@ -60,9 +62,9 @@ class LitStructureEmbedding(L.LightningModule):
         self.reset_z()
 
     def validation_step(self, batch, batch_idx):
-        x, y, z = batch
+        (x, x_mask), (y, y_mask), z = batch
         self.z.append(z)
-        self.z_pred.append(self.model(x, y))
+        self.z_pred.append(self.model(x, x_mask, y, y_mask))
 
     def on_validation_epoch_end(self):
         z = cat(self.z, dim=0)

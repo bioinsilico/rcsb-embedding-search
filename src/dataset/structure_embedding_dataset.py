@@ -28,12 +28,13 @@ class StructureEmbeddingDataset(Dataset):
         self.classes = {}
         self.embedding = {}
         self.class_pairs = list()
-        self.max_length = 0
+        self.match_score = match_score
+        self.__exec(class_file, embedding_path)
 
+    def __exec(self, class_file, embedding_path):
         self.load_classes(class_file)
         self.load_class_pairs()
         self.load_embedding(embedding_path)
-        self.match_score = match_score
 
     def load_classes(self, class_file):
         for pdb_class in open(class_file, "r"):
@@ -53,14 +54,6 @@ class StructureEmbeddingDataset(Dataset):
     def load_embedding(self, embedding_path):
         for dom_id in self.classes.keys():
             self.embedding[dom_id] = torch.load(f"{embedding_path}/{dom_id}.pt")
-            if self.embedding[dom_id].shape[0] > self.max_length:
-                self.max_length = self.embedding[dom_id].shape[0]
-
-    def pad_embedding(self):
-        for dom_id in self.classes.keys():
-            target = torch.zeros(self.max_length, self.embedding[dom_id].shape[1])
-            target[:self.embedding[dom_id].shape[0], :] = self.embedding[dom_id]
-            self.embedding[dom_id] = target
 
     def weights(self):
         p = 0.5 / sum([dp[0] for dp in self.class_pairs])

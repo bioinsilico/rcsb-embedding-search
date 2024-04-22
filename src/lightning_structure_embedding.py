@@ -4,6 +4,7 @@ import lightning as L
 from torch.utils.data import WeightedRandomSampler, DataLoader
 
 from src.dataset.structure_embedding_dataset import StructureEmbeddingDataset
+from src.dataset.utils import collate_fn
 from src.lightning_module.lightning_embedding import LitStructureEmbedding
 from src.networks.transformer_nn import TransformerEmbeddingCosine
 from src.params.structure_embedding_params import StructureEmbeddingParams
@@ -25,6 +26,8 @@ if __name__ == '__main__':
     parser.add_argument('--class_path', required=True)
     parser.add_argument('--embedding_path', required=True)
 
+    parser.add_argument('--metadata', type=str)
+
     args = parser.parse_args()
 
     params = StructureEmbeddingParams(args)
@@ -35,8 +38,6 @@ if __name__ == '__main__':
     ecod_embedding = f"{params.embedding_path}/ecod/embedding"
 
     training_set = StructureEmbeddingDataset(cath_classes, cath_embedding)
-    if params.batch_size > 1:
-        training_set.pad_embedding()
     weights = training_set.weights()
     sampler = WeightedRandomSampler(weights=weights, num_samples=len(weights), replacement=True)
     train_dataloader = DataLoader(
@@ -44,17 +45,17 @@ if __name__ == '__main__':
         sampler=sampler,
         batch_size=params.batch_size,
         num_workers=2,
-        persistent_workers=True
+        persistent_workers=True,
+        collate_fn=collate_fn
     )
 
     testing_set = StructureEmbeddingDataset(ecod_classes, ecod_embedding)
-    if params.batch_size > 1:
-        testing_set.pad_embedding()
     test_dataloader = DataLoader(
         testing_set,
         batch_size=params.batch_size,
         num_workers=2,
-        persistent_workers=True
+        persistent_workers=True,
+        collate_fn=collate_fn
     )
 
     model = LitStructureEmbedding(
@@ -79,6 +80,7 @@ if __name__ == '__main__':
         val_check_interval=params.test_every_n_steps,
         max_epochs=params.epochs,
         devices=params.devices,
-        callbacks=checkpoint_callback
+        callbacks=checkpoint_callback,
+        accelerator='cpu'
     )
     trainer.fit(model, train_dataloader, test_dataloader)

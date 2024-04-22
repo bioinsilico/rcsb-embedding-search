@@ -12,7 +12,7 @@ class LinearEmbeddingCosine(nn.Module):
             ('activation', nn.ReLU())
         ]))
 
-    def forward(self, x, y):
+    def forward(self, x, x_mask, y, y_mask):
         return nn.functional.cosine_similarity(
             self.embedding(x.mean(dim=1)),
             self.embedding(y.mean(dim=1))
@@ -42,10 +42,10 @@ class TransformerEmbeddingCosine(nn.Module):
             ('activation', nn.ReLU())
         ]))
 
-    def forward(self, x, y):
+    def forward(self, x, x_mask, y, y_mask):
         return nn.functional.cosine_similarity(
-            self.embedding(self.transformer(x).mean(dim=1)),
-            self.embedding(self.transformer(y).mean(dim=1))
+            self.embedding(self.transformer(x, src_key_padding_mask=x_mask).mean(dim=1)),
+            self.embedding(self.transformer(y, src_key_padding_mask=y_mask).mean(dim=1))
         )
 
     def get_weights(self):
