@@ -15,3 +15,5 @@ class StructureEmbeddingParams:
 
         self.class_path = args.class_path
         self.embedding_path = args.embedding_path
+
+        self.metadata = args.metadata if args.metadata else "None"

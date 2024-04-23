@@ -41,7 +41,7 @@ class LitStructureEmbedding(L.LightningModule):
                     self.params.hidden_layer,
                     self.params.num_layers,
                     self.params.nhead,
-                    self.params.metadata if hasattr(self.params, 'metadata') else "None"
+                    self.params.metadata
                 )
             )
 
