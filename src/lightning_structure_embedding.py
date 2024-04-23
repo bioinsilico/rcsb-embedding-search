@@ -80,7 +80,6 @@ if __name__ == '__main__':
         val_check_interval=params.test_every_n_steps,
         max_epochs=params.epochs,
         devices=params.devices,
-        callbacks=checkpoint_callback,
-        accelerator='cpu'
+        callbacks=checkpoint_callback
     )
     trainer.fit(model, train_dataloader, test_dataloader)
