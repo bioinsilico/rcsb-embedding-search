@@ -28,6 +28,8 @@ class LitStructureEmbedding(L.LightningModule):
                 '\n'.join([
                     "batch-size: %s  ",
                     "learning-rate: %s  ",
+                    "weight-decay: %s  ",
+                    "warmup-epochs: %s  ",
                     "input-layer: %s  ",
                     "feed-forward: %s  ",
                     "hidden-layer: %s  ",
@@ -38,6 +40,8 @@ class LitStructureEmbedding(L.LightningModule):
                 % (
                     self.params.batch_size,
                     self.params.learning_rate,
+                    self.params.weight_decay,
+                    self.params.warmup_epochs,
                     self.params.input_layer,
                     self.params.dim_feedforward,
                     self.params.hidden_layer,
