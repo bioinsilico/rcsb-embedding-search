@@ -1,4 +1,3 @@
-import argparse
 import lightning as L
 
 from torch.utils.data import WeightedRandomSampler, DataLoader
@@ -10,27 +9,8 @@ from src.networks.transformer_nn import TransformerEmbeddingCosine
 from src.params.structure_embedding_params import StructureEmbeddingParams
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--learning_rate', type=float)
-    parser.add_argument('--batch_size', type=int)
-    parser.add_argument('--epochs', type=int)
-    parser.add_argument('--input_layer', type=int)
-    parser.add_argument('--dim_feedforward', type=int)
-    parser.add_argument('--num_layers', type=int)
-    parser.add_argument('--nhead', type=int)
-    parser.add_argument('--hidden_layer', type=int)
 
-    parser.add_argument('--test_every_n_steps', type=int)
-    parser.add_argument('--devices', type=int)
-
-    parser.add_argument('--class_path', required=True)
-    parser.add_argument('--embedding_path', required=True)
-
-    parser.add_argument('--metadata', type=str)
-
-    args = parser.parse_args()
-
-    params = StructureEmbeddingParams(args)
+    params = StructureEmbeddingParams()
 
     cath_classes = f"{params.class_path}/cath.tsv"
     cath_embedding = f"{params.embedding_path}/cath/embedding"
@@ -76,10 +56,14 @@ if __name__ == '__main__':
         filename='{epoch}-{'+LitStructureEmbedding.PR_AUC_METRIC_NAME+':.2f}'
     )
 
+    lr_monitor = L.pytorch.callbacks.LearningRateMonitor(
+        logging_interval='step'
+    )
+
     trainer = L.Trainer(
         val_check_interval=params.test_every_n_steps,
-        max_epochs=params.epochs,
+        max_steps=params.test_every_n_steps * params.epochs,
         devices=params.devices,
-        callbacks=checkpoint_callback
+        callbacks=[checkpoint_callback, lr_monitor]
     )
     trainer.fit(model, train_dataloader, test_dataloader)

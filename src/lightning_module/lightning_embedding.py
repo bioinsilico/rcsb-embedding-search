@@ -2,6 +2,8 @@ import lightning as L
 from torch import nn, optim, cat
 from torcheval.metrics.functional import binary_auprc, binary_auroc
 
+from src.lightning_module.utils import get_cosine_schedule_with_warmup
+
 
 class LitStructureEmbedding(L.LightningModule):
     PR_AUC_METRIC_NAME = 'pr_auc'
@@ -76,8 +78,24 @@ class LitStructureEmbedding(L.LightningModule):
         self.reset_z()
 
     def configure_optimizers(self):
-        optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
-        return optimizer
+        optimizer = optim.AdamW(
+            params=self.parameters(),
+            lr=self.learning_rate,
+            weight_decay=self.params.weight_decay if self.params.weight_decay else 0
+        )
+        lr_scheduler = get_cosine_schedule_with_warmup(
+            optimizer,
+            warmup_epochs=self.params.warmup_epochs,
+            max_epochs=self.params.epochs
+        )
+        return {
+            'optimizer': optimizer,
+            'lr_scheduler': {
+                'scheduler': lr_scheduler,
+                'interval': "step",
+                'frequency': self.params.test_every_n_steps
+            }
+        }
 
     def reset_z(self):
         self.z = []
