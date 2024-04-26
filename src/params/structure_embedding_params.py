@@ -46,7 +46,9 @@ class StructureEmbeddingParams:
 
         self.metadata = args.metadata if args.metadata else "None"
 
-    def text_params(self):
+    def text_params(self, params=None):
+        if params is None:
+            params = {}
         return '\n'.join([
             "batch-size: %s  ",
             "learning-rate: %s  ",
@@ -57,8 +59,8 @@ class StructureEmbeddingParams:
             "hidden-layer: %s  ",
             "num-layers: %s  ",
             "n-head: %s  ",
-            "test-every-n-steps: %s",
-            "metadata: %s "
+            "test-every-n-steps: %s  ",
+            "metadata: %s  "
         ]) % (
             self.batch_size,
             self.learning_rate,
@@ -71,4 +73,4 @@ class StructureEmbeddingParams:
             self.nhead,
             self.test_every_n_steps,
             self.metadata
-        )
+        ) + "  \n" + "\n".join(["%s: %s" % (k, v) for k, v in params])

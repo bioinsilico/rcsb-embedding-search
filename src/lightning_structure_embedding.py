@@ -12,9 +12,9 @@ if __name__ == '__main__':
 
     params = StructureEmbeddingParams()
 
-    cath_classes = f"{params.class_path}/cath.tsv"
+    cath_classes = f"{params.class_path}/cath.ch.tsv"
     cath_embedding = f"{params.embedding_path}/cath/embedding"
-    ecod_classes = f"{params.class_path}/ecod.tsv"
+    ecod_classes = f"{params.class_path}/ecod.ch.tsv"
     ecod_embedding = f"{params.embedding_path}/ecod/embedding"
 
     training_set = StructureEmbeddingDataset(cath_classes, cath_embedding)

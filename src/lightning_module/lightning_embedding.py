@@ -23,9 +23,12 @@ class LitStructureEmbedding(L.LightningModule):
 
     def on_train_start(self):
         if self.params and hasattr(self.logger.experiment, 'add_text'):
+            summary = L.pytorch.utilities.model_summary.LayerSummary(self)
             self.logger.experiment.add_text(
                 "Param Description",
-                self.params.text_params()
+                self.params.text_params({
+                    "Number-parameters": f"{summary.num_parameters // 1e6}M"
+                })
             )
 
     def training_step(self, batch, batch_idx):
