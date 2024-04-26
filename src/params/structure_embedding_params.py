@@ -73,4 +73,4 @@ class StructureEmbeddingParams:
             self.nhead,
             self.test_every_n_steps,
             self.metadata
-        ) + "  \n" + "\n".join(["%s: %s" % (k, v) for k, v in params])
+        ) + "  \n" + "\n".join(["%s: %s" % (k, v) for k, v in params.items()])
