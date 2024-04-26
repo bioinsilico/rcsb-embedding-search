@@ -24,31 +24,8 @@ class LitStructureEmbedding(L.LightningModule):
     def on_train_start(self):
         if self.params and hasattr(self.logger.experiment, 'add_text'):
             self.logger.experiment.add_text(
-                "Description",
-                '\n'.join([
-                    "batch-size: %s  ",
-                    "learning-rate: %s  ",
-                    "weight-decay: %s  ",
-                    "warmup-epochs: %s  ",
-                    "input-layer: %s  ",
-                    "feed-forward: %s  ",
-                    "hidden-layer: %s  ",
-                    "num-layers: %s  ",
-                    "n-head: %s  ",
-                    "metadata: %s "
-                ])
-                % (
-                    self.params.batch_size,
-                    self.params.learning_rate,
-                    self.params.weight_decay,
-                    self.params.warmup_epochs,
-                    self.params.input_layer,
-                    self.params.dim_feedforward,
-                    self.params.hidden_layer,
-                    self.params.num_layers,
-                    self.params.nhead,
-                    self.params.metadata
-                )
+                "Param Description",
+                self.params.text_params()
             )
 
     def training_step(self, batch, batch_idx):

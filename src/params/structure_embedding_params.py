@@ -45,3 +45,30 @@ class StructureEmbeddingParams:
         self.embedding_path = args.embedding_path
 
         self.metadata = args.metadata if args.metadata else "None"
+
+    def text_params(self):
+        return '\n'.join([
+            "batch-size: %s  ",
+            "learning-rate: %s  ",
+            "weight-decay: %s  ",
+            "warmup-epochs: %s  ",
+            "input-layer: %s  ",
+            "feed-forward: %s  ",
+            "hidden-layer: %s  ",
+            "num-layers: %s  ",
+            "n-head: %s  ",
+            "test-every-n-steps: %s",
+            "metadata: %s "
+        ]) % (
+            self.batch_size,
+            self.learning_rate,
+            self.weight_decay,
+            self.warmup_epochs,
+            self.input_layer,
+            self.dim_feedforward,
+            self.hidden_layer,
+            self.num_layers,
+            self.nhead,
+            self.test_every_n_steps,
+            self.metadata
+        )
