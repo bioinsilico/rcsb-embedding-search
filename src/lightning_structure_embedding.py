@@ -17,7 +17,7 @@ if __name__ == '__main__':
     ecod_classes = f"{params.class_path}/ecod.ch.tsv"
     ecod_embedding = f"{params.embedding_path}/ecod/embedding"
 
-    training_set = StructureEmbeddingDataset(cath_classes, cath_embedding)
+    training_set = StructureEmbeddingDataset(cath_classes, cath_embedding, params)
     weights = training_set.weights()
     sampler = WeightedRandomSampler(weights=weights, num_samples=len(weights), replacement=True)
     train_dataloader = DataLoader(
@@ -29,7 +29,7 @@ if __name__ == '__main__':
         collate_fn=collate_fn
     )
 
-    testing_set = StructureEmbeddingDataset(ecod_classes, ecod_embedding)
+    testing_set = StructureEmbeddingDataset(ecod_classes, ecod_embedding, params)
     test_dataloader = DataLoader(
         testing_set,
         batch_size=params.batch_size,

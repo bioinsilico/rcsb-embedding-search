@@ -15,6 +15,7 @@ class StructureEmbeddingParams:
         parser.add_argument('--dim_feedforward', type=int)
         parser.add_argument('--num_layers', type=int)
         parser.add_argument('--nhead', type=int)
+        parser.add_argument('--amplify_input', type=int)
         parser.add_argument('--hidden_layer', type=int)
 
         parser.add_argument('--test_every_n_steps', type=int)
@@ -35,6 +36,7 @@ class StructureEmbeddingParams:
         self.input_layer = args.input_layer if args.input_layer else 640
         self.dim_feedforward = args.dim_feedforward if args.dim_feedforward else self.input_layer
         self.nhead = args.nhead if args.nhead else 8
+        self.amplify_input = args.amplify_input if args.amplify_input else 1
         self.num_layers = args.num_layers if args.num_layers else 6
         self.hidden_layer = args.hidden_layer if args.hidden_layer else self.input_layer
 
@@ -59,6 +61,7 @@ class StructureEmbeddingParams:
             "hidden-layer: %s  ",
             "num-layers: %s  ",
             "n-head: %s  ",
+            "amplify-input: %s  ",
             "test-every-n-steps: %s  ",
             "metadata: %s  "
         ]) % (
@@ -71,6 +74,7 @@ class StructureEmbeddingParams:
             self.hidden_layer,
             self.num_layers,
             self.nhead,
+            self.amplify_input,
             self.test_every_n_steps,
             self.metadata
         ) + "  \n" + "\n".join(["%s: %s" % (k, v) for k, v in params.items()])
