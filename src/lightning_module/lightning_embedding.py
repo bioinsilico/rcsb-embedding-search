@@ -21,7 +21,7 @@ class LitStructureEmbedding(L.LightningModule):
         self.z = []
         self.z_pred = []
 
-    def on_train_start(self):
+    def on_fit_start(self):
         if self.params and hasattr(self.logger.experiment, 'add_text'):
             summary = L.pytorch.utilities.model_summary.LayerSummary(self)
             self.logger.experiment.add_text(
@@ -38,9 +38,7 @@ class LitStructureEmbedding(L.LightningModule):
         self.z_pred.append(z_pred)
         return nn.functional.mse_loss(z_pred, z)
 
-    def on_validation_epoch_start(self):
-        if len(self.z) == 0:
-            return
+    def on_train_end(self) -> None:
         z = cat(self.z, dim=0)
         z_pred = cat(self.z_pred, dim=0)
         loss = nn.functional.mse_loss(z_pred, z)
