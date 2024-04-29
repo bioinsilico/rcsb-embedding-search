@@ -31,7 +31,7 @@ class LitStructureEmbedding(L.LightningModule):
                 })
             )
 
-    def training_step(self, batch):
+    def training_step(self, batch, batch_idx):
         (x, x_mask), (y, y_mask), z = batch
         z_pred = self.model(x, x_mask, y, y_mask)
         self.z.append(z)
@@ -45,7 +45,7 @@ class LitStructureEmbedding(L.LightningModule):
         self.log("train_loss", loss, sync_dist=True)
         self.reset_z()
 
-    def validation_step(self, batch):
+    def validation_step(self, batch, batch_idx):
         (x, x_mask), (y, y_mask), z = batch
         self.z.append(z)
         self.z_pred.append(self.model(x, x_mask, y, y_mask))
