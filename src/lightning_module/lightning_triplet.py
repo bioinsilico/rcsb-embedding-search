@@ -46,8 +46,8 @@ class LitTripletEmbedding(L.LightningModule):
         return self.triplet_loss(a_embedding, p_embedding, n_embedding)
 
     def on_train_epoch_end(self):
-        z = cat(self.z, dim=0)
-        z_pred = cat(self.z_pred, dim=0)
+        z = cat(self.z, dim=0).flip(0)
+        z_pred = cat(self.z_pred, dim=0).flip(0)
         loss = nn.functional.mse_loss(z_pred, z)
         self.log("mse_loss", loss, sync_dist=True)
         self.reset_z()
@@ -57,11 +57,11 @@ class LitTripletEmbedding(L.LightningModule):
         x_embedding = self.model(x, x_mask)
         y_embedding = self.model(y, y_mask)
         self.z.append(z)
-        self.z_pred.append(self.distance(x_embedding,y_embedding))
+        self.z_pred.append(self.distance(x_embedding, y_embedding))
 
     def on_validation_epoch_end(self):
-        z = cat(self.z, dim=0)
-        z_pred = cat(self.z_pred, dim=0)
+        z = cat(self.z, dim=0).flip(0)
+        z_pred = cat(self.z_pred, dim=0).flip(0)
         pr_auc = binary_auprc(z_pred, z)
         self.log(self.PR_AUC_METRIC_NAME, pr_auc, sync_dist=True)
         roc_auc = binary_auroc(z_pred, z)
