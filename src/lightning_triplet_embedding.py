@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 from src.dataset.structure_embedding_dataset import StructureEmbeddingDataset
 from src.dataset.triplet_embedding_dataset import TripletEmbeddingDataset
 from src.dataset.utils import collate_fn, triplet_collate_fn
-from src.lightning_module.lightning_embedding import LitStructureEmbedding
+from src.lightning_module.lightning_triplet import LitTripletEmbedding
 from src.networks.transformer_nn import TransformerEmbeddingCosine
 from src.params.structure_embedding_params import StructureEmbeddingParams
 
@@ -37,7 +37,7 @@ if __name__ == '__main__':
         collate_fn=collate_fn
     )
 
-    model = LitStructureEmbedding(
+    model = LitTripletEmbedding(
         net=TransformerEmbeddingCosine(
             input_features=params.input_layer,
             dim_feedforward=params.dim_feedforward,
@@ -50,9 +50,9 @@ if __name__ == '__main__':
     )
 
     checkpoint_callback = L.pytorch.callbacks.ModelCheckpoint(
-        monitor=LitStructureEmbedding.PR_AUC_METRIC_NAME,
+        monitor=LitTripletEmbedding.PR_AUC_METRIC_NAME,
         mode='max',
-        filename='{epoch}-{'+LitStructureEmbedding.PR_AUC_METRIC_NAME+':.2f}'
+        filename='{epoch}-{'+LitTripletEmbedding.PR_AUC_METRIC_NAME+':.2f}'
     )
 
     lr_monitor = L.pytorch.callbacks.LearningRateMonitor(
