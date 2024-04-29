@@ -39,9 +39,9 @@ class LitTripletEmbedding(L.LightningModule):
         a_embedding = self.model(a, a_mask)
         p_embedding = self.model(p, p_mask)
         n_embedding = self.model(n, n_mask)
-        self.z.append(ones(len(p)))
+        self.z.append(ones(len(p), device=self.device))
         self.z_pred.append(self.distance(a_embedding, p_embedding))
-        self.z.append(zeros(len(n)))
+        self.z.append(zeros(len(n), device=self.device))
         self.z_pred.append(self.distance(a_embedding, n_embedding))
         return self.triplet_loss(a_embedding, p_embedding, n_embedding)
 
