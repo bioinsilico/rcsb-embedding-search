@@ -37,3 +37,11 @@ def collate_fn(tuple_list):
         collate_seq_embeddings([y for x, y, z in tuple_list]),
         collate_label([z for x, y, z in tuple_list]),
     )
+
+
+def triplet_collate_fn(tuple_list):
+    return (
+        collate_seq_embeddings([x for x, y, z in tuple_list]),
+        collate_seq_embeddings([y for x, y, z in tuple_list]),
+        collate_seq_embeddings([z for x, y, z in tuple_list])
+    )

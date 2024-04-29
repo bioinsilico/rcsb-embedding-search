@@ -1,12 +1,14 @@
 import lightning as L
+import torch
 from torch import nn, optim, cat
 from torcheval.metrics.functional import binary_auprc, binary_auroc
 
 from src.lightning_module.utils import get_cosine_schedule_with_warmup
 
 
-class LitStructureEmbedding(L.LightningModule):
+class LitTripletEmbedding(L.LightningModule):
     PR_AUC_METRIC_NAME = 'pr_auc'
+    TRIPLET_LOSS_MARGIN = 0.5
 
     def __init__(
             self,
@@ -32,17 +34,20 @@ class LitStructureEmbedding(L.LightningModule):
             )
 
     def training_step(self, batch):
-        (x, x_mask), (y, y_mask), z = batch
-        z_pred = self.model(x, x_mask, y, y_mask)
-        self.z.append(z)
-        self.z_pred.append(z_pred)
-        return nn.functional.mse_loss(z_pred, z)
+        (a, a_mask), (p, p_mask), (n, n_mask) = batch
+        p_pred = self.model(a, a_mask, p, p_mask)
+        self.z.append(1.)
+        self.z_pred.append(p_pred)
+        n_pred = self.model(a, a_mask, n, n_mask)
+        self.z.append(0.)
+        self.z_pred.append(n_pred)
+        return torch.max(torch.FloatTensor([p_pred-n_pred+self.TRIPLET_LOSS_MARGIN, 0]))
 
     def on_train_epoch_end(self):
         z = cat(self.z, dim=0)
         z_pred = cat(self.z_pred, dim=0)
         loss = nn.functional.mse_loss(z_pred, z)
-        self.log("train_loss", loss, sync_dist=True)
+        self.log("mse_loss", loss, sync_dist=True)
         self.reset_z()
 
     def validation_step(self, batch):
