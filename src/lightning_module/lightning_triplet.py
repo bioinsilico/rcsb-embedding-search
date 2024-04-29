@@ -20,6 +20,7 @@ class LitTripletEmbedding(L.LightningModule):
         self.model = net
         self.learning_rate = learning_rate
         self.params = params
+        self.margin = self.TRIPLET_LOSS_MARGIN
         self.z = []
         self.z_pred = []
 
@@ -41,7 +42,8 @@ class LitTripletEmbedding(L.LightningModule):
         n_pred = self.model(a, a_mask, n, n_mask)
         self.z.append(0.)
         self.z_pred.append(n_pred)
-        return torch.max(torch.FloatTensor([p_pred-n_pred+self.TRIPLET_LOSS_MARGIN, 0]))
+        losses = torch.max(p_pred - n_pred + self.margin, torch.zeros_like(p_pred))
+        return losses.mean()
 
     def on_train_epoch_end(self):
         z = cat(self.z, dim=0)
