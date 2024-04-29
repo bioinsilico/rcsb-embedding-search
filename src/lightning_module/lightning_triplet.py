@@ -1,5 +1,5 @@
 import lightning as L
-from torch import nn, optim, cat
+from torch import nn, optim, cat, ones, zeros
 from torcheval.metrics.functional import binary_auprc, binary_auroc
 
 from src.lightning_module.utils import get_cosine_schedule_with_warmup
@@ -39,9 +39,9 @@ class LitTripletEmbedding(L.LightningModule):
         a_embedding = self.model(a, a_mask)
         p_embedding = self.model(p, p_mask)
         n_embedding = self.model(n, n_mask)
-        self.z.append(1.)
+        self.z.append(ones(len(p)))
         self.z_pred.append(self.distance(a_embedding, p_embedding))
-        self.z.append(0.)
+        self.z.append(zeros(len(n)))
         self.z_pred.append(self.distance(a_embedding, n_embedding))
         return self.triplet_loss(a_embedding, p_embedding, n_embedding)
 
