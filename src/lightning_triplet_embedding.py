@@ -6,7 +6,7 @@ from src.dataset.structure_embedding_dataset import StructureEmbeddingDataset
 from src.dataset.triplet_embedding_dataset import TripletEmbeddingDataset
 from src.dataset.utils import collate_fn, triplet_collate_fn
 from src.lightning_module.lightning_triplet import LitTripletEmbedding
-from src.networks.transformer_nn import TransformerEmbeddingCosine
+from src.networks.transformer_nn import TransformerEmbedding
 from src.params.structure_embedding_params import StructureEmbeddingParams
 
 if __name__ == '__main__':
@@ -38,7 +38,7 @@ if __name__ == '__main__':
     )
 
     model = LitTripletEmbedding(
-        net=TransformerEmbeddingCosine(
+        net=TransformerEmbedding(
             input_features=params.input_layer,
             dim_feedforward=params.dim_feedforward,
             hidden_layer=params.hidden_layer,

@@ -1,5 +1,4 @@
 import lightning as L
-import torch
 from torch import nn, optim, cat
 from torcheval.metrics.functional import binary_auprc, binary_auroc
 
@@ -8,7 +7,7 @@ from src.lightning_module.utils import get_cosine_schedule_with_warmup
 
 class LitTripletEmbedding(L.LightningModule):
     PR_AUC_METRIC_NAME = 'pr_auc'
-    TRIPLET_LOSS_MARGIN = 0.5
+    TRIPLET_LOSS_MARGIN = 5
 
     def __init__(
             self,
@@ -20,7 +19,8 @@ class LitTripletEmbedding(L.LightningModule):
         self.model = net
         self.learning_rate = learning_rate
         self.params = params
-        self.margin = self.TRIPLET_LOSS_MARGIN
+        self.triplet_loss = nn.TripletMarginLoss(margin=self.TRIPLET_LOSS_MARGIN, p=2, eps=1e-7)
+        self.distance = nn.PairwiseDistance(p=2, eps=1e-7)
         self.z = []
         self.z_pred = []
 
@@ -36,14 +36,14 @@ class LitTripletEmbedding(L.LightningModule):
 
     def training_step(self, batch, batch_idx):
         (a, a_mask), (p, p_mask), (n, n_mask) = batch
-        p_pred = self.model(a, a_mask, p, p_mask)
+        a_embedding = self.model(a, a_mask)
+        p_embedding = self.model(p, p_mask)
+        n_embedding = self.model(n, n_mask)
         self.z.append(1.)
-        self.z_pred.append(p_pred)
-        n_pred = self.model(a, a_mask, n, n_mask)
+        self.z_pred.append(self.distance(a_embedding, p_embedding))
         self.z.append(0.)
-        self.z_pred.append(n_pred)
-        losses = torch.max(p_pred - n_pred + self.margin, torch.zeros_like(p_pred))
-        return losses.mean()
+        self.z_pred.append(self.distance(a_embedding, n_embedding))
+        return self.triplet_loss(a_embedding, p_embedding, n_embedding)
 
     def on_train_epoch_end(self):
         z = cat(self.z, dim=0)
@@ -54,8 +54,10 @@ class LitTripletEmbedding(L.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         (x, x_mask), (y, y_mask), z = batch
+        x_embedding = self.model(x, x_mask)
+        y_embedding = self.model(y, y_mask)
         self.z.append(z)
-        self.z_pred.append(self.model(x, x_mask, y, y_mask))
+        self.z_pred.append(self.distance(x_embedding,y_embedding))
 
     def on_validation_epoch_end(self):
         z = cat(self.z, dim=0)
