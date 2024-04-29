@@ -33,7 +33,7 @@ class LitTripletEmbedding(L.LightningModule):
                 })
             )
 
-    def training_step(self, batch):
+    def training_step(self, batch, batch_idx):
         (a, a_mask), (p, p_mask), (n, n_mask) = batch
         p_pred = self.model(a, a_mask, p, p_mask)
         self.z.append(1.)
@@ -50,7 +50,7 @@ class LitTripletEmbedding(L.LightningModule):
         self.log("mse_loss", loss, sync_dist=True)
         self.reset_z()
 
-    def validation_step(self, batch):
+    def validation_step(self, batch, batch_idx):
         (x, x_mask), (y, y_mask), z = batch
         self.z.append(z)
         self.z_pred.append(self.model(x, x_mask, y, y_mask))
