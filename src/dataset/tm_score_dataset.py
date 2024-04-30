@@ -38,12 +38,6 @@ class TmScoreDataset(Dataset):
             if self.embedding[dom_id].shape[0] > self.max_length:
                 self.max_length = self.embedding[dom_id].shape[0]
 
-    def pad_embedding(self):
-        for dom_id in self.domains:
-            target = torch.zeros(self.max_length, self.embedding[dom_id].shape[1])
-            target[:self.embedding[dom_id].shape[0], :] = self.embedding[dom_id]
-            self.embedding[dom_id] = target
-
     def __len__(self):
         return len(self.class_pairs)
 
@@ -54,5 +48,7 @@ class TmScoreDataset(Dataset):
 
         return embedding_i, embedding_j, label
 
+
 if __name__ == '__main__':
-    TmScoreDataset('/Users/joan/data/cath_23M/cath_23M.csv', '/Users/joan/data/structure-embedding/pst_t30_so/cath_23M/embedding')
+    TmScoreDataset('/Users/joan/data/cath_23M/cath_23M.csv',
+                   '/Users/joan/data/structure-embedding/pst_t30_so/cath_23M/embedding')

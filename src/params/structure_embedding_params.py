@@ -4,29 +4,28 @@ import argparse
 class StructureEmbeddingParams:
 
     def __init__(self):
+        self.parser = argparse.ArgumentParser()
+        self.parser.add_argument('--learning_rate', type=float)
+        self.parser.add_argument('--weight_decay', type=float)
+        self.parser.add_argument('--warmup_epochs', type=int)
+        self.parser.add_argument('--batch_size', type=int)
+        self.parser.add_argument('--epochs', type=int)
+        self.parser.add_argument('--input_layer', type=int)
+        self.parser.add_argument('--dim_feedforward', type=int)
+        self.parser.add_argument('--num_layers', type=int)
+        self.parser.add_argument('--nhead', type=int)
+        self.parser.add_argument('--amplify_input', type=int)
+        self.parser.add_argument('--hidden_layer', type=int)
 
-        parser = argparse.ArgumentParser()
-        parser.add_argument('--learning_rate', type=float)
-        parser.add_argument('--weight_decay', type=float)
-        parser.add_argument('--warmup_epochs', type=int)
-        parser.add_argument('--batch_size', type=int)
-        parser.add_argument('--epochs', type=int)
-        parser.add_argument('--input_layer', type=int)
-        parser.add_argument('--dim_feedforward', type=int)
-        parser.add_argument('--num_layers', type=int)
-        parser.add_argument('--nhead', type=int)
-        parser.add_argument('--amplify_input', type=int)
-        parser.add_argument('--hidden_layer', type=int)
+        self.parser.add_argument('--test_every_n_steps', type=int)
+        self.parser.add_argument('--devices', type=int)
 
-        parser.add_argument('--test_every_n_steps', type=int)
-        parser.add_argument('--devices', type=int)
+        self.parser.add_argument('--class_path', required=True)
+        self.parser.add_argument('--embedding_path', required=True)
 
-        parser.add_argument('--class_path', required=True)
-        parser.add_argument('--embedding_path', required=True)
+        self.parser.add_argument('--metadata', type=str)
 
-        parser.add_argument('--metadata', type=str)
-
-        args = parser.parse_args()
+        args = self.parser.parse_args()
 
         self.learning_rate = args.learning_rate if args.learning_rate else 1e-6
         self.weight_decay = args.weight_decay if args.weight_decay else 0.
@@ -78,3 +77,17 @@ class StructureEmbeddingParams:
             self.test_every_n_steps,
             self.metadata
         ) + "  \n" + "\n".join(["%s: %s" % (k, v) for k, v in params.items()])
+
+
+class TmScoreParams(StructureEmbeddingParams):
+
+    def __init__(self):
+        super().__init__()
+
+        self.parser.add_argument('--tm_score_file', required=True)
+        self.parser.add_argument('--train_embedding_path', required=True)
+
+        args = self.parser.parse_args()
+
+        self.tm_score_file = args.tm_score_file
+        self.train_embedding_path = args.train_embedding_path

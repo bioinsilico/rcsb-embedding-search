@@ -1,61 +1,39 @@
-import argparse
 import lightning as L
 
 from torch.utils.data import DataLoader
 
 from src.dataset.structure_embedding_dataset import StructureEmbeddingDataset
 from src.dataset.tm_score_dataset import TmScoreDataset
+from src.dataset.utils import collate_fn
 from src.lightning_module.lightning_embedding import LitStructureEmbedding
 from src.networks.transformer_nn import TransformerEmbeddingCosine
-from src.params.structure_embedding_params import StructureEmbeddingParams
+from src.params.structure_embedding_params import TmScoreParams
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--learning_rate', type=float)
-    parser.add_argument('--batch_size', type=int)
-    parser.add_argument('--epochs', type=int)
-    parser.add_argument('--input_layer', type=int)
-    parser.add_argument('--dim_feedforward', type=int)
-    parser.add_argument('--num_layers', type=int)
-    parser.add_argument('--nhead', type=int)
-    parser.add_argument('--hidden_layer', type=int)
 
-    parser.add_argument('--test_every_n_steps', type=int)
-    parser.add_argument('--devices', type=int)
+    params = TmScoreParams()
 
-    parser.add_argument('--class_path', required=True)
-    parser.add_argument('--embedding_path', required=True)
-
-    parser.add_argument('--tm_score_file', required=True)
-    parser.add_argument('--train_embedding_path', required=True)
-
-    args = parser.parse_args()
-
-    params = StructureEmbeddingParams(args)
-
-    cath_classes = args.tm_score_file
-    cath_embedding = args.train_embedding_path
+    cath_classes = params.tm_score_file
+    cath_embedding = params.train_embedding_path
     ecod_classes = f"{params.class_path}/resources/ecod.tsv"
     ecod_embedding = f"{params.embedding_path}/ecod/embedding"
 
     training_set = TmScoreDataset(cath_classes, cath_embedding)
-    if params.batch_size > 1:
-        training_set.pad_embedding()
     train_dataloader = DataLoader(
         training_set,
         batch_size=params.batch_size,
         num_workers=2,
-        persistent_workers=True
+        persistent_workers=True,
+        collate_fn=collate_fn
     )
 
-    testing_set = StructureEmbeddingDataset(ecod_classes, ecod_embedding)
-    if params.batch_size > 1:
-        testing_set.pad_embedding()
+    testing_set = StructureEmbeddingDataset(ecod_classes, ecod_embedding, params)
     test_dataloader = DataLoader(
         testing_set,
         batch_size=params.batch_size,
         num_workers=2,
-        persistent_workers=True
+        persistent_workers=True,
+        collate_fn=collate_fn
     )
 
     model = LitStructureEmbedding(
@@ -76,10 +54,14 @@ if __name__ == '__main__':
         filename='{epoch}-{'+LitStructureEmbedding.PR_AUC_METRIC_NAME+':.2f}'
     )
 
+    lr_monitor = L.pytorch.callbacks.LearningRateMonitor(
+        logging_interval='step'
+    )
+
     trainer = L.Trainer(
         val_check_interval=params.test_every_n_steps,
-        max_epochs=params.epochs,
+        max_steps=params.test_every_n_steps * params.epochs,
         devices=params.devices,
-        callbacks=checkpoint_callback
+        callbacks=[checkpoint_callback, lr_monitor]
     )
     trainer.fit(model, train_dataloader, test_dataloader)
