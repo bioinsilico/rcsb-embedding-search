@@ -1,6 +1,6 @@
 import lightning as L
 
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, WeightedRandomSampler
 
 from src.dataset.structure_embedding_dataset import StructureEmbeddingDataset
 from src.dataset.tm_score_dataset import TmScoreDataset
@@ -19,8 +19,11 @@ if __name__ == '__main__':
     ecod_embedding = f"{params.embedding_path}/ecod/embedding"
 
     training_set = TmScoreDataset(cath_classes, cath_embedding)
+    weights = training_set.weights()
+    sampler = WeightedRandomSampler(weights=weights, num_samples=len(weights), replacement=True)
     train_dataloader = DataLoader(
         training_set,
+        sampler=sampler,
         batch_size=params.batch_size,
         num_workers=2,
         persistent_workers=True,
