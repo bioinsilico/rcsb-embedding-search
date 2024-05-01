@@ -81,8 +81,8 @@ class TmScoreWeight:
 
 if __name__ == '__main__':
     dataset = TmScoreDataset(
-        '/Users/joan/data/cath_23M/cath_23M.csv',
-        '/Users/joan/data/structure-embedding/pst_t30_so/cath_S40/embedding'
+        '/Users/joan/data/cath_23M/cath_23M_ch_ids.csv',
+        '/Users/joan/cs-data/structure-embedding/pst_t30_so/cath_S40/embedding'
     )
     weights = dataset.weights()
     sampler = WeightedRandomSampler(weights=weights, num_samples=len(weights), replacement=True)
