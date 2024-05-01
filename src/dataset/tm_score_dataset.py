@@ -15,22 +15,27 @@ class TmScoreDataset(Dataset):
         self.__exec(tm_score_file, embedding_path)
 
     def __exec(self, tm_score_file, embedding_path):
-        self.load_class_pairs(tm_score_file)
+        self.load_class_pairs(tm_score_file, embedding_path)
         self.load_embedding(embedding_path)
 
-    def load_class_pairs(self, tm_score_file):
+    def load_class_pairs(self, tm_score_file, embedding_path):
         for row in open(tm_score_file):
             r = row.strip().split(",")
             dom_i = r[0]
             dom_j = r[1]
             tm_score = r[2]
-            self.domains.add(dom_i)
-            self.domains.add(dom_j)
-            self.class_pairs.append([
-                tm_score,
-                dom_i,
-                dom_j
-            ])
+            file_i = os.path.join(embedding_path, f"{dom_i}.pt")
+            file_j = os.path.join(embedding_path, f"{dom_j}.pt")
+            if os.path.isfile(file_i) and os.path.isfile(file_j):
+                self.domains.add(dom_i)
+                self.domains.add(dom_j)
+                self.class_pairs.append([
+                    tm_score,
+                    dom_i,
+                    dom_j
+                ])
+            else:
+                print(f"Ignoring pair: {file_i}, {file_j}, {tm_score}")
         print(f"Total pairs: {len(self.class_pairs)}")
 
     def load_embedding(self, embedding_path):
