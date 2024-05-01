@@ -15,7 +15,7 @@ if __name__ == '__main__':
 
     cath_classes = params.tm_score_file
     cath_embedding = params.train_embedding_path
-    ecod_classes = f"{params.class_path}/resources/ecod.tsv"
+    ecod_classes = f"{params.class_path}/ecod.ch.tsv"
     ecod_embedding = f"{params.embedding_path}/ecod/embedding"
 
     training_set = TmScoreDataset(cath_classes, cath_embedding)
