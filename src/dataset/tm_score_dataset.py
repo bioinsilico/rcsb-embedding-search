@@ -27,7 +27,7 @@ class TmScoreDataset(Dataset):
             r = row.strip().split(",")
             dom_i = r[0]
             dom_j = r[1]
-            tm_score = math.floor(10 * float(r[2])) / 10
+            tm_score = float(r[2])
             self.domains.add(dom_i)
             self.domains.add(dom_j)
             self.class_pairs.append([
@@ -41,12 +41,12 @@ class TmScoreDataset(Dataset):
         for dom_id in self.domains:
             self.embedding[dom_id] = torch.load(os.path.join(embedding_path, f"{dom_id}.pt"))
 
-    def __weights(self):
+    def weights(self):
         p = 0.5 / sum([1 for dp in self.class_pairs if dp[0] >= 0.7])
         n = 0.5 / sum([1 for dp in self.class_pairs if dp[0] < 0.7])
         return torch.tensor([p if dp[0] >= 0.7 else n for dp in self.class_pairs])
 
-    def weights(self):
+    def __weights(self):
         class_weights = TmScoreWeight([dp[0] for dp in self.class_pairs])
         return torch.tensor([class_weights.get_weight(dp[0]) for dp in self.class_pairs])
 
@@ -70,9 +70,13 @@ class TmScoreWeight:
     def __compute(self, scores):
         n = 10
         h = 1 / n
+        l = len(scores)
         for idx in range(n):
+            f = sum([1 for s in scores if idx * h < s <= (idx + 1) * h])
+            if f == 0:
+                print(idx)
             self.weights.append(
-                h / sum([1 for s in scores if s >= idx*h and (s < (idx+1)) * h])
+                l / f
             )
 
     def get_weight(self, score):
@@ -85,6 +89,7 @@ if __name__ == '__main__':
         '/Users/joan/cs-data/structure-embedding/pst_t30_so/cath_S40/embedding'
     )
     weights = dataset.weights()
+    print(len(dataset), len(weights))
     sampler = WeightedRandomSampler(weights=weights, num_samples=len(weights), replacement=True)
     dataloader = DataLoader(
         dataset,
@@ -92,4 +97,3 @@ if __name__ == '__main__':
         batch_size=16,
         collate_fn=collate_fn
     )
-
