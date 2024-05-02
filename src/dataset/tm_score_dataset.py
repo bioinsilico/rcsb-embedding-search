@@ -56,7 +56,8 @@ class TmScoreDataset(Dataset):
     def __getitem__(self, idx):
         embedding_i = self.embedding[self.class_pairs[idx][1]]
         embedding_j = self.embedding[self.class_pairs[idx][2]]
-        label = torch.from_numpy(np.array(self.class_pairs[idx][0], dtype=d_type))
+        score = 1. if self.class_pairs[idx][0] >= 0.7 else 0.
+        label = torch.from_numpy(np.array(score, dtype=d_type))
 
         return embedding_i, embedding_j, label
 
