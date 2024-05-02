@@ -102,6 +102,8 @@ class TmScoreParams:
 
         self.parser.add_argument('--test_every_n_steps', type=int)
         self.parser.add_argument('--devices', type=int)
+        self.parser.add_argument('--workers', type=int)
+        self.parser.add_argument('--strategy', type=str)
 
         self.parser.add_argument('--class_path', required=True)
         self.parser.add_argument('--embedding_path', required=True)
@@ -124,6 +126,8 @@ class TmScoreParams:
 
         self.test_every_n_steps = args.test_every_n_steps if args.test_every_n_steps else 10000
         self.devices = args.devices if args.devices else 1
+        self.workers = args.workers if args.workers else 2
+        self.strategy = args.strategy if args.strategy else "auto"
 
         self.class_path = args.class_path
         self.embedding_path = args.embedding_path

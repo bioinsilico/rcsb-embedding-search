@@ -25,7 +25,7 @@ if __name__ == '__main__':
         training_set,
         sampler=sampler,
         batch_size=params.batch_size,
-        num_workers=2,
+        num_workers=params.workers,
         persistent_workers=True,
         collate_fn=collate_fn
     )
@@ -34,7 +34,7 @@ if __name__ == '__main__':
     test_dataloader = DataLoader(
         testing_set,
         batch_size=params.batch_size,
-        num_workers=2,
+        num_workers=params.workers,
         persistent_workers=True,
         collate_fn=collate_fn
     )
@@ -65,6 +65,7 @@ if __name__ == '__main__':
         val_check_interval=params.test_every_n_steps,
         max_steps=params.test_every_n_steps * params.epochs,
         devices=params.devices,
+        strategy=params.strategy,
         callbacks=[checkpoint_callback, lr_monitor]
     )
     trainer.fit(model, train_dataloader, test_dataloader)
