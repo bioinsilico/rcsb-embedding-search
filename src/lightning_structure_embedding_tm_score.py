@@ -3,8 +3,8 @@ import lightning as L
 from torch.utils.data import DataLoader
 
 from src.dataset.structure_embedding_dataset import StructureEmbeddingDataset
-from src.dataset.tm_score_dataset import TmScoreDataset, CustomWeightedRandomSampler
-from src.dataset.utils import collate_fn
+from src.dataset.tm_score_dataset import TmScoreDataset, fraction_score, tm_score_weights
+from src.dataset.utils import collate_fn, CustomWeightedRandomSampler
 from src.lightning_module.lightning_embedding import LitStructureEmbedding
 from src.networks.transformer_nn import TransformerEmbeddingCosine
 from src.params.structure_embedding_params import TmScoreParams
@@ -18,8 +18,13 @@ if __name__ == '__main__':
     ecod_classes = f"{params.class_path}/ecod.ch.tsv"
     ecod_embedding = f"{params.embedding_path}/ecod/embedding"
 
-    training_set = TmScoreDataset(cath_classes, cath_embedding)
-    weights = training_set.binary_weights()
+    training_set = TmScoreDataset(
+        cath_classes,
+        cath_embedding,
+        score_method=fraction_score,
+        weighting_method=tm_score_weights(5)
+    )
+    weights = training_set.weights()
     sampler = CustomWeightedRandomSampler(weights=weights, num_samples=len(weights), replacement=True)
     train_dataloader = DataLoader(
         training_set,

@@ -5,7 +5,7 @@ from torch.utils.data import Dataset, WeightedRandomSampler, DataLoader
 import numpy as np
 import os
 
-from src.dataset.utils import collate_fn
+from src.dataset.utils import collate_fn, CustomWeightedRandomSampler
 
 d_type = np.float32
 
@@ -14,11 +14,13 @@ class TmScoreDataset(Dataset):
 
     BINARY_THR = 0.7
 
-    def __init__(self, tm_score_file, embedding_path):
+    def __init__(self, tm_score_file, embedding_path, score_method=None, weighting_method=None):
         self.domains = set()
         self.embedding = {}
         self.class_pairs = list()
         self.max_length = 0
+        self.score_method = binary_score(self.BINARY_THR) if not score_method else score_method
+        self.weighting_method = binary_weights(self.BINARY_THR) if not weighting_method else weighting_method
         self.__exec(tm_score_file, embedding_path)
 
     def __exec(self, tm_score_file, embedding_path):
@@ -44,14 +46,8 @@ class TmScoreDataset(Dataset):
         for dom_id in self.domains:
             self.embedding[dom_id] = torch.load(os.path.join(embedding_path, f"{dom_id}.pt"))
 
-    def binary_weights(self):
-        p = 0.5 / sum([1 for dp in self.class_pairs if dp[0] >= self.BINARY_THR])
-        n = 0.5 / sum([1 for dp in self.class_pairs if dp[0] < self.BINARY_THR])
-        return torch.tensor([p if dp[0] >= 0.7 else n for dp in self.class_pairs])
-
     def weights(self):
-        class_weights = TmScoreWeight([dp[0] for dp in self.class_pairs])
-        return torch.tensor([class_weights.get_weight(dp[0]) for dp in self.class_pairs])
+        return self.weighting_method([dp[0] for dp in self.class_pairs])
 
     def __len__(self):
         return len(self.class_pairs)
@@ -59,59 +55,71 @@ class TmScoreDataset(Dataset):
     def __getitem__(self, idx):
         embedding_i = self.embedding[self.class_pairs[idx][1]]
         embedding_j = self.embedding[self.class_pairs[idx][2]]
-        score = 1. if self.class_pairs[idx][0] >= self.BINARY_THR else 0.
+        score = self.score_method(self.class_pairs[idx][0])
         label = torch.from_numpy(np.array(score, dtype=d_type))
 
         return embedding_i, embedding_j, label
 
 
+def binary_score(thr):
+    def __binary_score(score):
+        return 1. if score > thr else 0.
+    return __binary_score
+
+
+def binary_weights(thr):
+    def __binary_weights(scores):
+        p = 1 / sum([1 for s in scores if s >= thr])
+        n = 1 / sum([1 for s in scores if s < thr])
+        return torch.tensor([p if s >= thr else n for s in scores])
+    return __binary_weights
+
+
+def fraction_score(score):
+    return round(10 * score) / 10
+
+
+def tm_score_weights(n_intervals):
+    def __tm_score_weights(scores):
+        class_weights = TmScoreWeight(scores, n_intervals)
+        return torch.tensor([class_weights.get_weight(s) for s in scores])
+    return __tm_score_weights
+
+
 class TmScoreWeight:
 
-    def __init__(self, scores):
+    def __init__(self, scores, n_intervals=5):
         self.weights = []
+        self.n_intervals = n_intervals
         self.__compute(scores)
 
     def __compute(self, scores):
-        n = 10
-        h = 1 / n
-        l = len(scores)
-        for idx in range(n):
-            f = sum([1 for s in scores if idx * h < s <= (idx + 1) * h])
-            if f == 0:
-                print(idx)
+        h = 1 / self.n_intervals
+        for idx in range(self.n_intervals):
+            f = sum([1 for s in scores if idx * h <= s < (idx + 1) * h])
             self.weights.append(
-                l / f
+                1 / f
             )
 
     def get_weight(self, score):
-        return self.weights[math.floor(10 * score)]
-
-
-class CustomWeightedRandomSampler(WeightedRandomSampler):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-    def __iter__(self):
-        rand_tensor = np.random.choice(
-            range(0, len(self.weights)),
-            size=self.num_samples,
-            p=self.weights.numpy() / torch.sum(self.weights).numpy(),
-            replace=self.replacement
-        )
-        rand_tensor = torch.from_numpy(rand_tensor)
-        return iter(rand_tensor.tolist())
+        idx = math.floor(score * self.n_intervals)
+        if idx == self.n_intervals:
+            idx = self.n_intervals - 1
+        return self.weights[idx]
 
 
 if __name__ == '__main__':
     dataset = TmScoreDataset(
         '/Users/joan/data/cath_23M/cath_23M_ch_ids.csv',
-        '/Users/joan/cs-data/structure-embedding/pst_t30_so/cath_S40/embedding'
+        '/Users/joan/cs-data/structure-embedding/pst_t30_so/cath_S40/embedding',
+        score_method=fraction_score,
+        weighting_method=tm_score_weights(5)
     )
-    weights = dataset.binary_weights()
+    weights = dataset.weights()
     sampler = CustomWeightedRandomSampler(
         weights=weights,
         num_samples=len(weights),
-        replacement=True
+        replacement=True,
     )
     dataloader = DataLoader(
         dataset,
@@ -119,3 +127,5 @@ if __name__ == '__main__':
         batch_size=16,
         collate_fn=collate_fn
     )
+    for (x, x_mask), (y, y_mask), z in dataloader:
+        print(z)
