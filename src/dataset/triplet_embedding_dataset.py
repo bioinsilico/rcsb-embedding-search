@@ -6,12 +6,11 @@ d_type = np.float32
 
 
 class TripletEmbeddingDataset(Dataset):
-    def __init__(self, class_file, embedding_path, params):
+    def __init__(self, class_file, embedding_path):
         self.domain_to_class = {}
         self.class_to_domains = {}
         self.embedding = {}
         self.class_triplets = list()
-        self.params = params
         self.__exec(class_file, embedding_path)
 
     def __exec(self, class_file, embedding_path):
@@ -37,7 +36,7 @@ class TripletEmbeddingDataset(Dataset):
 
     def load_embedding(self, embedding_path):
         for dom_id in self.domain_to_class.keys():
-            self.embedding[dom_id] = torch.load(f"{embedding_path}/{dom_id}.pt").repeat(1, self.params.amplify_input)
+            self.embedding[dom_id] = torch.load(f"{embedding_path}/{dom_id}.pt")
 
     def __len__(self):
         return len(self.class_triplets)

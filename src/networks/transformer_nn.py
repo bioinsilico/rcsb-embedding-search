@@ -7,6 +7,7 @@ class LinearEmbeddingCosine(nn.Module):
     def __init__(self, input_features=1280, hidden_layer=1280):
         super().__init__()
         self.embedding = nn.Sequential(OrderedDict([
+            ('norm', nn.LayerNorm(input_features)),
             ('dropout', nn.Dropout(p=0.0)),
             ('linear', nn.Linear(input_features, hidden_layer)),
             ('activation', nn.ReLU())
@@ -14,8 +15,8 @@ class LinearEmbeddingCosine(nn.Module):
 
     def forward(self, x, x_mask, y, y_mask):
         return nn.functional.cosine_similarity(
-            self.embedding(x.mean(dim=1)),
-            self.embedding(y.mean(dim=1))
+            self.embedding(x.sum(dim=1)),
+            self.embedding(y.sum(dim=1))
         )
 
     def get_weights(self):
@@ -36,6 +37,7 @@ class TransformerEmbeddingCosine(nn.Module):
         )
         self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
         self.embedding = nn.Sequential(OrderedDict([
+            ('norm', nn.LayerNorm(input_features)),
             ('dropout', nn.Dropout(p=self.dropout)),
             ('linear', nn.Linear(input_features, hidden_layer)),
             ('activation', nn.ReLU())
@@ -43,8 +45,8 @@ class TransformerEmbeddingCosine(nn.Module):
 
     def forward(self, x, x_mask, y, y_mask):
         return nn.functional.cosine_similarity(
-            self.embedding(self.transformer(x, src_key_padding_mask=x_mask).mean(dim=1)),
-            self.embedding(self.transformer(y, src_key_padding_mask=y_mask).mean(dim=1))
+            self.embedding(self.transformer(x, src_key_padding_mask=x_mask).sum(dim=1)),
+            self.embedding(self.transformer(y, src_key_padding_mask=y_mask).sum(dim=1))
         )
 
     def get_weights(self):
@@ -71,7 +73,7 @@ class TransformerEmbedding(nn.Module):
         ]))
 
     def forward(self, x, x_mask):
-        return self.embedding(self.transformer(x, src_key_padding_mask=x_mask).mean(dim=1))
+        return self.embedding(self.transformer(x, src_key_padding_mask=x_mask).sum(dim=1))
 
     def get_weights(self):
         return [(name, param) for name, param in self.embedding.named_parameters()]

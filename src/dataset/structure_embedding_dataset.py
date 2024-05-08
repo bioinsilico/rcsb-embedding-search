@@ -24,11 +24,10 @@ def class_strict_match(class_i, class_j):
 
 
 class StructureEmbeddingDataset(Dataset):
-    def __init__(self, class_file, embedding_path, params, match_score=class_strict_match):
+    def __init__(self, class_file, embedding_path, match_score=class_strict_match):
         self.classes = {}
         self.embedding = {}
         self.class_pairs = list()
-        self.params = params
         self.match_score = match_score
         self.__exec(class_file, embedding_path)
 
@@ -54,7 +53,7 @@ class StructureEmbeddingDataset(Dataset):
 
     def load_embedding(self, embedding_path):
         for dom_id in self.classes.keys():
-            self.embedding[dom_id] = torch.load(f"{embedding_path}/{dom_id}.pt").repeat(1, self.params.amplify_input)
+            self.embedding[dom_id] = torch.load(f"{embedding_path}/{dom_id}.pt")
 
     def weights(self):
         p = 0.5 / sum([dp[0] for dp in self.class_pairs])

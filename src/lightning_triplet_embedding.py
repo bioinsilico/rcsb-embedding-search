@@ -13,12 +13,15 @@ if __name__ == '__main__':
 
     params = StructureEmbeddingParams()
 
-    cath_classes = f"{params.class_path}/cath.ch.tsv"
-    cath_embedding = f"{params.embedding_path}/cath/embedding"
-    ecod_classes = f"{params.class_path}/ecod.ch.tsv"
-    ecod_embedding = f"{params.embedding_path}/ecod/embedding"
+    train_classes = params.train_class_file
+    train_embedding = params.train_embedding_path
+    test_classes = params.test_class_file
+    test_embedding = params.test_embedding_path
 
-    training_set = TripletEmbeddingDataset(cath_classes, cath_embedding, params)
+    training_set = TripletEmbeddingDataset(
+        train_classes,
+        train_embedding
+    )
     train_dataloader = DataLoader(
         training_set,
         shuffle=True,
@@ -28,7 +31,10 @@ if __name__ == '__main__':
         collate_fn=triplet_collate_fn
     )
 
-    testing_set = StructureEmbeddingDataset(ecod_classes, ecod_embedding, params)
+    testing_set = StructureEmbeddingDataset(
+        test_classes,
+        test_embedding
+    )
     test_dataloader = DataLoader(
         testing_set,
         batch_size=params.batch_size,
