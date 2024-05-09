@@ -1,7 +1,7 @@
 import math
 
 import torch
-from torch.utils.data import Dataset, WeightedRandomSampler, DataLoader
+from torch.utils.data import Dataset, DataLoader
 import numpy as np
 import os
 
