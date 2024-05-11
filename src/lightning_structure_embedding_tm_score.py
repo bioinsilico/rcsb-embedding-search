@@ -27,7 +27,11 @@ if __name__ == '__main__':
         weighting_method=tm_score_weights(5)
     )
     weights = training_set.weights()
-    sampler = CustomWeightedRandomSampler(weights=weights, num_samples=len(weights), replacement=True)
+    sampler = CustomWeightedRandomSampler(
+        weights=weights,
+        num_samples=params.epoch_size if params.epoch_size > 0 else len(weights),
+        replacement=True
+    )
     train_dataloader = DataLoader(
         training_set,
         sampler=sampler,
@@ -77,7 +81,7 @@ if __name__ == '__main__':
 
     trainer = L.Trainer(
         val_check_interval=params.test_every_n_steps,
-        max_steps=params.test_every_n_steps * params.epochs,
+        max_epochs=params.epochs,
         devices=params.devices,
         strategy=params.strategy,
         callbacks=[checkpoint_callback, lr_monitor]
