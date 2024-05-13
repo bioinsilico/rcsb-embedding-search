@@ -4,7 +4,6 @@ import lightning as L
 
 from torch.utils.data import DataLoader
 
-from src.dataset.structure_embedding_dataset import StructureEmbeddingDataset
 from src.dataset.tm_score_dataset import TmScoreDataset, fraction_score, tm_score_weights
 from src.dataset.utils import collate_fn, CustomWeightedRandomSampler
 from src.lightning_module.lightning_embedding import LitStructureEmbedding
@@ -41,7 +40,7 @@ if __name__ == '__main__':
         collate_fn=collate_fn
     )
 
-    testing_set = StructureEmbeddingDataset(
+    testing_set = TmScoreDataset(
         test_classes,
         test_embedding
     )
