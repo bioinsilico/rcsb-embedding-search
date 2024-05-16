@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 from src.dataset.tm_score_dataset import TmScoreDataset, fraction_score, tm_score_weights
 from src.dataset.utils import collate_fn, CustomWeightedRandomSampler
 from src.lightning_module.lightning_embedding import LitStructureEmbedding
-from src.networks.transformer_nn import TransformerEmbeddingCosine
+from src.networks.transformer_nn import TransformerResBlockEmbeddingCosine
 from src.params.structure_embedding_params import StructureEmbeddingParams
 
 if __name__ == '__main__':
@@ -52,7 +52,7 @@ if __name__ == '__main__':
         collate_fn=collate_fn
     )
 
-    net = TransformerEmbeddingCosine(
+    net = TransformerResBlockEmbeddingCosine(
         input_features=params.input_layer,
         dim_feedforward=params.dim_feedforward,
         hidden_layer=params.hidden_layer,
