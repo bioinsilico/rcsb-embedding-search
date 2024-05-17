@@ -119,11 +119,10 @@ class ResBlock(nn.Module):
             nn.LayerNorm(in_dim),
             nn.Dropout(p=dropout),
             nn.Linear(in_dim, out_dim),
-            nn.BatchNorm1d(out_dim),
             nn.ReLU(),
+            nn.LayerNorm(in_dim),
             nn.Dropout(p=dropout),
             nn.Linear(out_dim, out_dim),
-            nn.BatchNorm1d(out_dim),
         )
         self.activate = nn.ReLU()
 
