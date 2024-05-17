@@ -26,6 +26,8 @@ class StructureEmbeddingParams:
         self.parser.add_argument('--hidden_layer', type=int)
 
         self.parser.add_argument('--test_every_n_steps', type=int)
+        self.parser.add_argument('--lr_frequency', type=int)
+        self.parser.add_argument('--lr_interval', type=str)
         self.parser.add_argument('--devices', type=int)
         self.parser.add_argument('--workers', type=int)
         self.parser.add_argument('--strategy', type=str)
@@ -48,6 +50,8 @@ class StructureEmbeddingParams:
         self.hidden_layer = args.hidden_layer if args.hidden_layer else self.input_layer
 
         self.test_every_n_steps = args.test_every_n_steps if args.test_every_n_steps else 10000
+        self.lr_frequency = args.lr_frequency if args.lr_frequency else 1
+        self.lr_interval = args.lr_interval if args.lr_interval == "step" else "epoch"
         self.devices = args.devices if args.devices else 1
         self.workers = args.workers if args.workers else 2
         self.strategy = args.strategy if args.strategy else "auto"

@@ -79,7 +79,6 @@ if __name__ == '__main__':
     )
 
     trainer = L.Trainer(
-        val_check_interval=params.test_every_n_steps,
         max_epochs=params.epochs,
         devices=params.devices,
         strategy=params.strategy,

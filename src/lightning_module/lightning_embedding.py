@@ -76,8 +76,8 @@ class LitStructureEmbedding(L.LightningModule):
             'optimizer': optimizer,
             'lr_scheduler': {
                 'scheduler': lr_scheduler,
-                'interval': "step",
-                'frequency': self.params.test_every_n_steps
+                'interval': self.params.lr_interval,
+                'frequency': self.params.lr_frequency
             }
         }
 
