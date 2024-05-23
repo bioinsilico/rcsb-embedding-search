@@ -4,7 +4,6 @@ import argparse
 class StructureEmbeddingParams:
 
     def __init__(self):
-
         self.parser = argparse.ArgumentParser()
 
         self.parser.add_argument('--train_class_file', required=True)
@@ -67,28 +66,5 @@ class StructureEmbeddingParams:
     def text_params(self, params=None):
         if params is None:
             params = {}
-        return '\n'.join([
-            "batch-size: %s  ",
-            "learning-rate: %s  ",
-            "weight-decay: %s  ",
-            "warmup-epochs: %s  ",
-            "input-layer: %s  ",
-            "feed-forward: %s  ",
-            "hidden-layer: %s  ",
-            "num-layers: %s  ",
-            "n-head: %s  ",
-            "test-every-n-steps: %s  ",
-            "metadata: %s  "
-        ]) % (
-            self.batch_size,
-            self.learning_rate,
-            self.weight_decay,
-            self.warmup_epochs,
-            self.input_layer,
-            self.dim_feedforward,
-            self.hidden_layer,
-            self.num_layers,
-            self.nhead,
-            self.test_every_n_steps,
-            self.metadata
-        ) + "  \n" + "\n".join(["%s: %s" % (k, v) for k, v in params.items()])
+        params.update(self.__dict__)
+        return '\n'.join(["%s: %s  " % (k, v) for k, v in params.items()])
