@@ -67,4 +67,4 @@ class StructureEmbeddingParams:
         if params is None:
             params = {}
         params.update(self.__dict__)
-        return '\n'.join(["%s: %s  " % (k, v) for k, v in params.items()])
+        return '\n'.join(["%s: %s  " % (k, v) for k, v in params.items() if k != "parser"])
