@@ -84,7 +84,7 @@ if __name__ == '__main__':
         devices=params.devices,
         strategy=params.strategy,
         callbacks=[checkpoint_callback, lr_monitor],
-        plugins=[SLURMEnvironment(requeue_signal=signal.SIGHUP)]
+        plugins=[SLURMEnvironment(requeue_signal=signal.SIGUSR1)]
     )
     trainer.fit(
         model,
