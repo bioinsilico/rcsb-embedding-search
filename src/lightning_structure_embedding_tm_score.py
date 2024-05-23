@@ -1,6 +1,8 @@
 import os.path
+import signal
 
 import lightning as L
+from lightning.pytorch.plugins.environments import SLURMEnvironment
 
 from torch.utils.data import DataLoader
 
@@ -81,7 +83,8 @@ if __name__ == '__main__':
         max_epochs=params.epochs,
         devices=params.devices,
         strategy=params.strategy,
-        callbacks=[checkpoint_callback, lr_monitor]
+        callbacks=[checkpoint_callback, lr_monitor],
+        plugins=[SLURMEnvironment(requeue_signal=signal.SIGHUP)]
     )
     trainer.fit(
         model,
