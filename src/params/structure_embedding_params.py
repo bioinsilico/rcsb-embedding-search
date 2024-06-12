@@ -52,7 +52,7 @@ class StructureEmbeddingParams:
         self.lr_frequency = args.lr_frequency if args.lr_frequency else 1
         self.lr_interval = args.lr_interval if args.lr_interval == "step" else "epoch"
         self.devices = args.devices if args.devices else 1
-        self.workers = args.workers if args.workers else 0
+        self.workers = args.workers if args.workers else None
         self.strategy = args.strategy if args.strategy else "auto"
 
         self.metadata = args.metadata if args.metadata else "None"

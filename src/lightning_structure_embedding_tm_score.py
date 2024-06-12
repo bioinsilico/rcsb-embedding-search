@@ -38,7 +38,7 @@ if __name__ == '__main__':
         sampler=sampler,
         batch_size=params.batch_size,
         num_workers=params.workers,
-        persistent_workers=True,
+        persistent_workers=True if params.workers > 0 else False,
         collate_fn=collate_fn
     )
 
@@ -50,7 +50,7 @@ if __name__ == '__main__':
         testing_set,
         batch_size=params.batch_size,
         num_workers=params.workers,
-        persistent_workers=True,
+        persistent_workers=True if params.workers > 0 else False,
         collate_fn=collate_fn
     )
 
