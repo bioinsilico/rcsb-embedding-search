@@ -49,7 +49,7 @@ if __name__ == '__main__':
     )
     test_dataloader = DataLoader(
         testing_set,
-        batch_size=params.batch_size,
+        batch_size=params.testing_batch_size,
         num_workers=params.workers,
         persistent_workers=True if params.workers > 0 else False,
         collate_fn=collate_fn

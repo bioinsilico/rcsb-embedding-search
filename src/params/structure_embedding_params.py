@@ -15,6 +15,7 @@ class StructureEmbeddingParams:
         self.parser.add_argument('--weight_decay', type=float)
         self.parser.add_argument('--warmup_epochs', type=int)
         self.parser.add_argument('--batch_size', type=int)
+        self.parser.add_argument('--testing_batch_size', type=int)
         self.parser.add_argument('--epochs', type=int)
         self.parser.add_argument('--epoch_size', type=int)
         self.parser.add_argument('--input_layer', type=int)
@@ -40,6 +41,7 @@ class StructureEmbeddingParams:
         self.weight_decay = args.weight_decay if args.weight_decay else 0.
         self.warmup_epochs = args.warmup_epochs if args.warmup_epochs else 0
         self.batch_size = args.batch_size if args.batch_size else 32
+        self.testing_batch_size = args.testing_batch_size if args.testing_batch_size else self.batch_size
         self.epochs = args.epochs if args.epochs else 100
         self.epoch_size = args.epoch_size if args.epoch_size else 0
         self.input_layer = args.input_layer if args.input_layer else 640
