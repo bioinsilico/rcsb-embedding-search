@@ -42,12 +42,12 @@ if __name__ == '__main__':
         collate_fn=collate_fn
     )
 
-    testing_set = TmScoreDataset(
+    validation_set = TmScoreDataset(
         test_classes,
         test_embedding
     )
-    test_dataloader = DataLoader(
-        testing_set,
+    validation_dataloader = DataLoader(
+        validation_set,
         batch_size=params.testing_batch_size,
         num_workers=params.workers,
         persistent_workers=True if params.workers > 0 else False,
@@ -82,6 +82,7 @@ if __name__ == '__main__':
 
     trainer = L.Trainer(
         max_epochs=params.epochs,
+        check_val_every_n_epoch=params.check_val_every_n_epoch,
         devices=params.devices,
         strategy=params.strategy,
         callbacks=[checkpoint_callback, lr_monitor],
@@ -90,6 +91,6 @@ if __name__ == '__main__':
     trainer.fit(
         model,
         train_dataloader,
-        test_dataloader,
+        validation_dataloader,
         ckpt_path=params.checkpoint if os.path.isfile(params.checkpoint) else None
     )

@@ -43,6 +43,7 @@ class StructureEmbeddingParams:
         self.batch_size = args.batch_size if args.batch_size else 32
         self.testing_batch_size = args.testing_batch_size if args.testing_batch_size else self.batch_size
         self.epochs = args.epochs if args.epochs else 100
+        self.check_val_every_n_epoch = args.check_val_every_n_epoch if args.check_val_every_n_epoch else 1
         self.epoch_size = args.epoch_size if args.epoch_size else 0
         self.input_layer = args.input_layer if args.input_layer else 640
         self.dim_feedforward = args.dim_feedforward if args.dim_feedforward else self.input_layer
