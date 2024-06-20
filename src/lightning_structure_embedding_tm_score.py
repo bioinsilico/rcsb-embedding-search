@@ -4,11 +4,10 @@ import signal
 import lightning as L
 from lightning.pytorch.plugins.environments import SLURMEnvironment
 
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, WeightedRandomSampler
 
-# from src.dataset.tm_score_dataset import TmScoreDataset, fraction_score, tm_score_weights
 from src.dataset.tm_score_from_file_dataset import TmScoreDatasetFromFile, fraction_score, tm_score_weights
-from src.dataset.utils import collate_fn, CustomWeightedRandomSampler
+from src.dataset.utils import collate_fn
 from src.lightning_module.lightning_embedding import LitStructureEmbedding
 from src.networks.transformer_nn import TransformerEmbeddingCosine
 from src.params.structure_embedding_params import StructureEmbeddingParams
@@ -29,7 +28,7 @@ if __name__ == '__main__':
         weighting_method=tm_score_weights(5)
     )
     weights = training_set.weights()
-    sampler = CustomWeightedRandomSampler(
+    sampler = WeightedRandomSampler(
         weights=weights,
         num_samples=params.epoch_size if params.epoch_size > 0 else len(weights),
         replacement=True
@@ -84,6 +83,7 @@ if __name__ == '__main__':
     trainer = L.Trainer(
         max_epochs=params.epochs,
         check_val_every_n_epoch=params.check_val_every_n_epoch,
+        reload_dataloaders_every_n_epochs=1,
         devices=params.devices,
         strategy=params.strategy,
         callbacks=[checkpoint_callback, lr_monitor],
