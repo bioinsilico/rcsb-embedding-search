@@ -17,6 +17,7 @@ class StructureEmbeddingParams:
         self.parser.add_argument('--batch_size', type=int)
         self.parser.add_argument('--testing_batch_size', type=int)
         self.parser.add_argument('--epochs', type=int)
+        self.parser.add_argument('--check_val_every_n_epoch', type=int)
         self.parser.add_argument('--epoch_size', type=int)
         self.parser.add_argument('--input_layer', type=int)
         self.parser.add_argument('--dim_feedforward', type=int)
