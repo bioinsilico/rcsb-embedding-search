@@ -6,7 +6,8 @@ from lightning.pytorch.plugins.environments import SLURMEnvironment
 
 from torch.utils.data import DataLoader
 
-from src.dataset.tm_score_dataset import TmScoreDataset, fraction_score, tm_score_weights
+# from src.dataset.tm_score_dataset import TmScoreDataset, fraction_score, tm_score_weights
+from src.dataset.tm_score_from_file_dataset import TmScoreDatasetFromFile, fraction_score, tm_score_weights
 from src.dataset.utils import collate_fn, CustomWeightedRandomSampler
 from src.lightning_module.lightning_embedding import LitStructureEmbedding
 from src.networks.transformer_nn import TransformerEmbeddingCosine
@@ -21,7 +22,7 @@ if __name__ == '__main__':
     test_classes = params.test_class_file
     test_embedding = params.test_embedding_path
 
-    training_set = TmScoreDataset(
+    training_set = TmScoreDatasetFromFile(
         train_classes,
         train_embedding,
         score_method=fraction_score,
@@ -42,7 +43,7 @@ if __name__ == '__main__':
         collate_fn=collate_fn
     )
 
-    validation_set = TmScoreDataset(
+    validation_set = TmScoreDatasetFromFile(
         test_classes,
         test_embedding
     )
