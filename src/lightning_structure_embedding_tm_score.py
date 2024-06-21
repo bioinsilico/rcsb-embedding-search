@@ -82,7 +82,6 @@ if __name__ == '__main__':
 
     trainer = L.Trainer(
         max_epochs=params.epochs,
-        check_val_every_n_epoch=params.check_val_every_n_epoch,
         devices=params.devices,
         strategy=params.strategy,
         callbacks=[checkpoint_callback, lr_monitor],
