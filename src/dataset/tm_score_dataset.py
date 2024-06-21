@@ -1,11 +1,12 @@
-import math
 
 import torch
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
 import os
 
-from src.dataset.utils import collate_fn, CustomWeightedRandomSampler
+from dataset.utils.custom_weighted_random_sampler import CustomWeightedRandomSampler
+from dataset.utils.tm_score_weight import tm_score_weights, fraction_score, binary_score, binary_weights
+from dataset.utils.tools import collate_fn
 
 d_type = np.float32
 
@@ -18,7 +19,6 @@ class TmScoreDataset(Dataset):
         self.domains = set()
         self.embedding = {}
         self.class_pairs = list()
-        self.max_length = 0
         self.score_method = binary_score(self.BINARY_THR) if not score_method else score_method
         self.weighting_method = binary_weights(self.BINARY_THR) if not weighting_method else weighting_method
         self.__exec(tm_score_file, embedding_path)
@@ -59,53 +59,6 @@ class TmScoreDataset(Dataset):
         label = torch.from_numpy(np.array(score, dtype=d_type))
 
         return embedding_i, embedding_j, label
-
-
-def binary_score(thr):
-    def __binary_score(score):
-        return 1. if score > thr else 0.
-    return __binary_score
-
-
-def binary_weights(thr):
-    def __binary_weights(scores):
-        p = 1 / sum([1 for s in scores if s >= thr])
-        n = 1 / sum([1 for s in scores if s < thr])
-        return torch.tensor([p if s >= thr else n for s in scores])
-    return __binary_weights
-
-
-def fraction_score(score):
-    return round(10 * score) / 10
-
-
-def tm_score_weights(n_intervals):
-    def __tm_score_weights(scores):
-        class_weights = TmScoreWeight(scores, n_intervals)
-        return torch.tensor([class_weights.get_weight(s) for s in scores])
-    return __tm_score_weights
-
-
-class TmScoreWeight:
-
-    def __init__(self, scores, n_intervals=5):
-        self.weights = []
-        self.n_intervals = n_intervals
-        self.__compute(scores)
-
-    def __compute(self, scores):
-        h = 1 / self.n_intervals
-        for idx in range(self.n_intervals):
-            f = sum([1 for s in scores if idx * h <= s < (idx + 1) * h])
-            self.weights.append(
-                1 / f
-            )
-
-    def get_weight(self, score):
-        idx = math.floor(score * self.n_intervals)
-        if idx == self.n_intervals:
-            idx = self.n_intervals - 1
-        return self.weights[idx]
 
 
 if __name__ == '__main__':

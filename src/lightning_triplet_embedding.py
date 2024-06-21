@@ -4,7 +4,7 @@ from torch.utils.data import DataLoader
 
 from src.dataset.structure_embedding_dataset import StructureEmbeddingDataset
 from src.dataset.triplet_embedding_dataset import TripletEmbeddingDataset
-from src.dataset.utils import collate_fn, triplet_collate_fn
+from dataset.utils.tools import collate_fn, triplet_collate_fn
 from src.lightning_module.lightning_triplet import LitTripletEmbedding
 from src.networks.transformer_nn import TransformerEmbedding
 from src.params.structure_embedding_params import StructureEmbeddingParams

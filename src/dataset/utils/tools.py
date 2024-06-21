@@ -1,6 +1,31 @@
-import numpy as np
+import os
 import torch
-from torch.utils.data import WeightedRandomSampler
+
+
+def load_class_pairs(tm_score_file):
+    domains = set({})
+    class_pairs = []
+    for row in open(tm_score_file):
+        r = row.strip().split(",")
+        dom_i = r[0]
+        dom_j = r[1]
+        tm_score = float(r[2])
+        domains.add(dom_i)
+        domains.add(dom_j)
+        class_pairs.append([
+            tm_score,
+            dom_i,
+            dom_j
+        ])
+    print(f"Total pairs: {len(class_pairs)}")
+    return domains, class_pairs
+
+
+def load_tensors(tensor_path, file_name_list):
+    data_map = {}
+    for dom_id in file_name_list:
+        data_map[dom_id] = torch.load(os.path.join(tensor_path, f"{dom_id}.pt"))
+    return data_map
 
 
 def collate_seq_embeddings(batch_list):
@@ -49,16 +74,4 @@ def triplet_collate_fn(tuple_list):
     )
 
 
-class CustomWeightedRandomSampler(WeightedRandomSampler):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
 
-    def __iter__(self):
-        rand_tensor = np.random.choice(
-            range(0, len(self.weights)),
-            size=self.num_samples,
-            p=self.weights.numpy() / torch.sum(self.weights).numpy(),
-            replace=self.replacement
-        )
-        rand_tensor = torch.from_numpy(rand_tensor)
-        return iter(rand_tensor.tolist())

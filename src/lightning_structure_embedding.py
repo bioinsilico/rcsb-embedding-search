@@ -3,7 +3,7 @@ import lightning as L
 from torch.utils.data import WeightedRandomSampler, DataLoader
 
 from src.dataset.structure_embedding_dataset import StructureEmbeddingDataset
-from src.dataset.utils import collate_fn
+from dataset.utils.tools import collate_fn
 from src.lightning_module.lightning_embedding import LitStructureEmbedding
 from src.networks.transformer_nn import TransformerEmbeddingCosine
 from src.params.structure_embedding_params import StructureEmbeddingParams

@@ -4,13 +4,14 @@ import signal
 import lightning as L
 from lightning.pytorch.plugins.environments import SLURMEnvironment
 
-from torch.utils.data import DataLoader
+from torch_geometric.loader import DataLoader
 
+from dataset.geo_graph_dataset import GeoGraphDataset
 from dataset.utils.custom_weighted_random_sampler import CustomWeightedRandomSampler
-from src.dataset.tm_score_dataset import TmScoreDataset, fraction_score, tm_score_weights
+from dataset.utils.tm_score_weight import fraction_score, tm_score_weights
 from dataset.utils.tools import collate_fn
-from src.lightning_module.lightning_embedding import LitStructureEmbedding
-from src.networks.transformer_nn import TransformerEmbeddingCosine
+from lightning_module.lightning_geo_graph import LitStructureGeoGraph
+from networks.transformer_graph_nn import TransformerGraphEmbeddingCosine
 from src.params.structure_embedding_params import StructureEmbeddingParams
 
 if __name__ == '__main__':
@@ -22,7 +23,7 @@ if __name__ == '__main__':
     test_classes = params.test_class_file
     test_embedding = params.test_embedding_path
 
-    training_set = TmScoreDataset(
+    training_set = GeoGraphDataset(
         train_classes,
         train_embedding,
         score_method=fraction_score,
@@ -43,7 +44,7 @@ if __name__ == '__main__':
         collate_fn=collate_fn
     )
 
-    validation_set = TmScoreDataset(
+    validation_set = GeoGraphDataset(
         test_classes,
         test_embedding
     )
@@ -55,26 +56,20 @@ if __name__ == '__main__':
         collate_fn=collate_fn
     )
 
-    net = TransformerEmbeddingCosine(
-        input_features=params.input_layer,
-        dim_feedforward=params.dim_feedforward,
-        hidden_layer=params.hidden_layer,
-        nhead=params.nhead,
-        num_layers=params.num_layers
-    )
-    model = LitStructureEmbedding.load_from_checkpoint(
+    net = TransformerGraphEmbeddingCosine()
+    model = LitStructureGeoGraph.load_from_checkpoint(
         params.checkpoint,
         params=params
-    ) if os.path.isfile(params.checkpoint) else LitStructureEmbedding(
+    ) if os.path.isfile(params.checkpoint) else LitStructureGeoGraph(
         net=net,
         learning_rate=params.learning_rate,
         params=params,
     )
 
     checkpoint_callback = L.pytorch.callbacks.ModelCheckpoint(
-        monitor=LitStructureEmbedding.PR_AUC_METRIC_NAME,
+        monitor=LitStructureGeoGraph.PR_AUC_METRIC_NAME,
         mode='max',
-        filename='{epoch}-{'+LitStructureEmbedding.PR_AUC_METRIC_NAME+':.2f}'
+        filename='{epoch}-{'+LitStructureGeoGraph.PR_AUC_METRIC_NAME+':.2f}'
     )
 
     lr_monitor = L.pytorch.callbacks.LearningRateMonitor(
