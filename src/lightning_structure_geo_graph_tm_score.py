@@ -40,8 +40,7 @@ if __name__ == '__main__':
         sampler=sampler,
         batch_size=params.batch_size,
         num_workers=params.workers,
-        persistent_workers=True if params.workers > 0 else False,
-        collate_fn=collate_fn
+        persistent_workers=True if params.workers > 0 else False
     )
 
     validation_set = GeoGraphDataset(
@@ -52,8 +51,7 @@ if __name__ == '__main__':
         validation_set,
         batch_size=params.testing_batch_size,
         num_workers=params.workers,
-        persistent_workers=True if params.workers > 0 else False,
-        collate_fn=collate_fn
+        persistent_workers=True if params.workers > 0 else False
     )
 
     net = TransformerGraphEmbeddingCosine()
