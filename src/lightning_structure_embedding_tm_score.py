@@ -85,9 +85,7 @@ if __name__ == '__main__':
 
     if params.profiler_file:
         profiler = PyTorchProfiler(
-            dirpath=params.profiler_path,
-            filename=params.profiler_file,
-            emit_nvtx=True
+            filename=params.profiler_file
         )
     else:
         profiler = None

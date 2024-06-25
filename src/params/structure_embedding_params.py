@@ -36,7 +36,6 @@ class StructureEmbeddingParams:
         self.parser.add_argument('--checkpoint', type=str)
         self.parser.add_argument('--metadata', type=str)
 
-        self.parser.add_argument('--profiler_path', type=str)
         self.parser.add_argument('--profiler_file', type=str)
 
         args = self.parser.parse_args()
@@ -65,7 +64,6 @@ class StructureEmbeddingParams:
         self.metadata = args.metadata if args.metadata else "None"
         self.checkpoint = args.checkpoint if args.checkpoint else "None"
 
-        self.profiler_path = args.profiler_path if args.profiler_path else "./"
         self.profiler_file = args.profiler_file if args.profiler_file else None
 
         self.train_class_file = args.train_class_file
