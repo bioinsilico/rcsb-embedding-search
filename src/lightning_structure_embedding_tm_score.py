@@ -3,7 +3,7 @@ import signal
 
 import lightning as L
 from lightning.pytorch.plugins.environments import SLURMEnvironment
-from lightning.pytorch.profilers import AdvancedProfiler
+from lightning.pytorch.profilers import PyTorchProfiler
 
 from torch.utils.data import DataLoader
 
@@ -84,7 +84,11 @@ if __name__ == '__main__':
     )
 
     if params.profiler_file:
-        profiler = AdvancedProfiler(dirpath=params.profiler_path, filename=params.profiler_file)
+        profiler = PyTorchProfiler(
+            dirpath=params.profiler_path,
+            filename=params.profiler_file,
+            emit_nvtx=True
+        )
     else:
         profiler = None
 
