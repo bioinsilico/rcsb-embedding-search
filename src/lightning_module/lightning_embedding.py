@@ -58,7 +58,10 @@ class LitStructureEmbedding(L.LightningModule):
         z_pred = cat(self.z_pred, dim=0)
         pr_auc = binary_auprc(z_pred, z)
         self.log(self.PR_AUC_METRIC_NAME, pr_auc, sync_dist=True)
-        roc_auc = binary_auroc(z_pred, z)
+        if self.device.type == 'mps':
+            roc_auc = binary_auroc(z_pred.to('cpu'), z.to('cpu'))
+        else:
+            roc_auc = binary_auroc(z_pred, z)
         self.log("roc_auc", roc_auc, sync_dist=True)
         self.reset_z()
 

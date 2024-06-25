@@ -3,12 +3,13 @@ import signal
 
 import lightning as L
 from lightning.pytorch.plugins.environments import SLURMEnvironment
+from lightning.pytorch.profilers import AdvancedProfiler
 
 from torch.utils.data import DataLoader
 
-from dataset.tm_score_file_dataset import TmScoreFileDataset
 from dataset.utils.custom_weighted_random_sampler import CustomWeightedRandomSampler
-from src.dataset.tm_score_dataset import fraction_score, tm_score_weights
+from dataset.utils.tm_score_weight import fraction_score, tm_score_weights
+from src.dataset.tm_score_dataset import TmScoreDataset
 from dataset.utils.tools import collate_fn
 from src.lightning_module.lightning_embedding import LitStructureEmbedding
 from src.networks.transformer_nn import TransformerEmbeddingCosine
@@ -23,7 +24,7 @@ if __name__ == '__main__':
     test_classes = params.test_class_file
     test_embedding = params.test_embedding_path
 
-    training_set = TmScoreFileDataset(
+    training_set = TmScoreDataset(
         train_classes,
         train_embedding,
         score_method=fraction_score,
@@ -44,7 +45,7 @@ if __name__ == '__main__':
         collate_fn=collate_fn
     )
 
-    validation_set = TmScoreFileDataset(
+    validation_set = TmScoreDataset(
         test_classes,
         test_embedding
     )
@@ -82,14 +83,21 @@ if __name__ == '__main__':
         logging_interval='step'
     )
 
+    if params.profiler_file:
+        profiler = AdvancedProfiler(dirpath=params.profiler_path, filename=params.profiler_file)
+    else:
+        profiler = None
+
     trainer = L.Trainer(
         max_epochs=params.epochs,
         check_val_every_n_epoch=params.check_val_every_n_epoch,
         devices=params.devices,
         strategy=params.strategy,
         callbacks=[checkpoint_callback, lr_monitor],
-        plugins=[SLURMEnvironment(requeue_signal=signal.SIGUSR1)]
+        plugins=[SLURMEnvironment(requeue_signal=signal.SIGUSR1)],
+        profiler=profiler
     )
+
     trainer.fit(
         model,
         train_dataloader,
