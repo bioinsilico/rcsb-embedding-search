@@ -32,6 +32,9 @@ class LitStructureEmbedding(L.LightningModule):
                 })
             )
 
+    def on_train_epoch_start(self):
+        self.reset_z()
+
     def training_step(self, batch, batch_idx):
         (x, x_mask), (y, y_mask), z = batch
         z_pred = self.model(x, x_mask, y, y_mask)
@@ -39,13 +42,13 @@ class LitStructureEmbedding(L.LightningModule):
         self.z_pred.append(z_pred)
         return nn.functional.mse_loss(z_pred, z)
 
-    def on_validation_epoch_start(self):
-        if len(self.z) == 0:
-            return
+    def on_train_epoch_end(self):
         z = cat(self.z, dim=0)
         z_pred = cat(self.z_pred, dim=0)
         loss = nn.functional.mse_loss(z_pred, z)
         self.log("train_loss", loss, sync_dist=True)
+
+    def on_validation_epoch_start(self):
         self.reset_z()
 
     def validation_step(self, batch, batch_idx):
