@@ -66,7 +66,6 @@ class LitStructureEmbedding(L.LightningModule):
         else:
             roc_auc = binary_auroc(z_pred, z)
         self.log("roc_auc", roc_auc, sync_dist=True)
-        self.reset_z()
 
     def configure_optimizers(self):
         optimizer = optim.AdamW(
