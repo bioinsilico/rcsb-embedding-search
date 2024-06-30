@@ -11,6 +11,7 @@ from dataset.utils.custom_weighted_random_sampler import CustomWeightedRandomSam
 from dataset.utils.tm_score_weight import fraction_score, tm_score_weights
 from src.dataset.tm_score_dataset import TmScoreDataset
 from dataset.utils.tools import collate_fn
+from src.dataset.tm_score_from_file_dataset import TmScoreFileDataset
 from src.lightning_module.lightning_embedding import LitStructureEmbedding
 from src.networks.transformer_nn import TransformerEmbeddingCosine
 from src.params.structure_embedding_params import StructureEmbeddingParams
@@ -24,7 +25,7 @@ if __name__ == '__main__':
     test_classes = params.test_class_file
     test_embedding = params.test_embedding_path
 
-    training_set = TmScoreDataset(
+    training_set = TmScoreFileDataset(
         train_classes,
         train_embedding,
         score_method=fraction_score,
@@ -45,7 +46,7 @@ if __name__ == '__main__':
         collate_fn=collate_fn
     )
 
-    validation_set = TmScoreDataset(
+    validation_set = TmScoreFileDataset(
         test_classes,
         test_embedding
     )
