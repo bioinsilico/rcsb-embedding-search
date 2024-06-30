@@ -58,7 +58,7 @@ if __name__ == '__main__':
         collate_fn=collate_fn
     )
 
-    net = TransformerEmbeddingCosine(
+    nn_model = TransformerEmbeddingCosine(
         input_features=params.input_layer,
         dim_feedforward=params.dim_feedforward,
         hidden_layer=params.hidden_layer,
@@ -69,7 +69,7 @@ if __name__ == '__main__':
         params.checkpoint,
         params=params
     ) if os.path.isfile(params.checkpoint) else LitStructureEmbedding(
-        net=net,
+        nn_model=nn_model,
         learning_rate=params.learning_rate,
         params=params,
     )
