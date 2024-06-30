@@ -45,7 +45,7 @@ if __name__ == '__main__':
     )
 
     model = LitStructureEmbedding(
-        net=TransformerEmbeddingCosine(
+        nn_model=TransformerEmbeddingCosine(
             input_features=params.input_layer,
             dim_feedforward=params.dim_feedforward,
             hidden_layer=params.hidden_layer,

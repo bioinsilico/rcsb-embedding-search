@@ -10,13 +10,13 @@ class LitStructureEmbedding(L.LightningModule):
 
     def __init__(
             self,
-            net,
+            nn_model,
             learning_rate=1e-6,
             params=None
     ):
         super().__init__()
-        self.save_hyperparameters(ignore=['net'])
-        self.model = net
+        self.save_hyperparameters()
+        self.model = nn_model
         self.learning_rate = learning_rate
         self.params = params
         self.z = []
