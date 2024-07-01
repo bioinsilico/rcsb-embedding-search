@@ -2,23 +2,22 @@ from collections import OrderedDict
 
 import torch.nn as nn
 from torch_geometric.nn import global_add_pool
-from torch_geometric.nn.conv import TransformerConv
+from networks.layers import UniMP
 
 
 class TransformerGraphEmbeddingCosine(nn.Module):
 
     dropout = 0
 
-    def __init__(self, node_dim=8, edge_dim=1, out_dim=640, num_layers=6):
+    def __init__(self, node_dim=8, edge_dim=1, out_dim=640, num_layers=12):
         super().__init__()
 
-        self.graph_transformer = TransformerConv(node_dim, out_dim, edge_dim=edge_dim)
-        self.graph_transformer_layers = []
-
-        for i in range(1, num_layers):
-            self.graph_transformer_layers.append(
-                TransformerConv(out_dim, out_dim, edge_dim=edge_dim)
-            )
+        self.graph_transformer = UniMP(
+            node_dim,
+            out_dim,
+            edge_channels=edge_dim,
+            num_layers=num_layers
+        )
 
         self.embedding = nn.Sequential(OrderedDict([
             ('norm', nn.LayerNorm(out_dim)),
@@ -28,9 +27,7 @@ class TransformerGraphEmbeddingCosine(nn.Module):
         ]))
 
     def graph_transformer_forward(self, g):
-        x = self.graph_transformer(g.x, g.edge_index, g.edge_attr)
-        for tr in self.graph_transformer_layers:
-            x = tr(x, g.edge_index, g.edge_attr)
+        x = self.graph_transformer(g.x[:, 3:11], g.edge_index, g.edge_attr[:, None])
         return global_add_pool(x, g.batch)
 
     def forward(self, g_i, g_j):

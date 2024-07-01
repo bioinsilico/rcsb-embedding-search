@@ -2,7 +2,6 @@ import numpy as np
 import torch
 from torch_geometric.data import Dataset
 from torch_geometric.loader import DataLoader
-from torch_geometric.nn import TransformerConv, global_add_pool
 
 from dataset.utils.tm_score_weight import binary_score, binary_weights, fraction_score, tm_score_weights
 from dataset.utils.tools import load_class_pairs, load_tensors
@@ -52,7 +51,7 @@ class GeoGraphDataset(Dataset):
 if __name__ == '__main__':
     dataset = GeoGraphDataset(
         "/Users/joan/data/cath_23M/cath_23M.csv",
-        "/Users/joan/data/cath_S40/graph-geo",
+        "/Users/joan/cs-data/structure-embedding/cath_S40/graph-geo",
         score_method=fraction_score,
         weighting_method=tm_score_weights(5)
     )

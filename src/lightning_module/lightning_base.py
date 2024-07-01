@@ -5,7 +5,7 @@ from torcheval.metrics.functional import binary_auprc, binary_auroc
 from src.lightning_module.utils import get_cosine_schedule_with_warmup
 
 
-class LitStructureEmbedding(L.LightningModule):
+class LitStructureBase(L.LightningModule):
     PR_AUC_METRIC_NAME = 'pr_auc'
 
     def __init__(
@@ -15,8 +15,6 @@ class LitStructureEmbedding(L.LightningModule):
             params=None
     ):
         super().__init__()
-        # Keep this if you update to LitStructureBase
-        self.save_hyperparameters()
         self.model = nn_model
         self.learning_rate = learning_rate
         self.params = params
@@ -36,13 +34,6 @@ class LitStructureEmbedding(L.LightningModule):
     def on_train_epoch_start(self):
         self.reset_z()
 
-    def training_step(self, batch, batch_idx):
-        (x, x_mask), (y, y_mask), z = batch
-        z_pred = self.model(x, x_mask, y, y_mask)
-        self.z.append(z)
-        self.z_pred.append(z_pred)
-        return nn.functional.mse_loss(z_pred, z)
-
     def on_train_epoch_end(self):
         z = cat(self.z, dim=0)
         z_pred = cat(self.z_pred, dim=0)
@@ -51,11 +42,6 @@ class LitStructureEmbedding(L.LightningModule):
 
     def on_validation_epoch_start(self):
         self.reset_z()
-
-    def validation_step(self, batch, batch_idx):
-        (x, x_mask), (y, y_mask), z = batch
-        self.z.append(z)
-        self.z_pred.append(self.model(x, x_mask, y, y_mask))
 
     def on_validation_epoch_end(self):
         z = cat(self.z, dim=0)

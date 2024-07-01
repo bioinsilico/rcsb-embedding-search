@@ -3,13 +3,13 @@ import signal
 
 import lightning as L
 from lightning.pytorch.plugins.environments import SLURMEnvironment
+from torch_geometric.data.lightning import LightningDataset
 
 from torch_geometric.loader import DataLoader
 
 from dataset.geo_graph_dataset import GeoGraphDataset
 from dataset.utils.custom_weighted_random_sampler import CustomWeightedRandomSampler
 from dataset.utils.tm_score_weight import fraction_score, tm_score_weights
-from dataset.utils.tools import collate_fn
 from lightning_module.lightning_geo_graph import LitStructureGeoGraph
 from networks.transformer_graph_nn import TransformerGraphEmbeddingCosine
 from src.params.structure_embedding_params import StructureEmbeddingParams
@@ -47,8 +47,14 @@ if __name__ == '__main__':
         test_classes,
         test_embedding
     )
+    validation_sampler = CustomWeightedRandomSampler(
+        weights=validation_set.weights(),
+        num_samples=1000,
+        replacement=True
+    )
     validation_dataloader = DataLoader(
         validation_set,
+        sampler=validation_sampler,
         batch_size=params.testing_batch_size,
         num_workers=params.workers,
         persistent_workers=True if params.workers > 0 else False
@@ -59,7 +65,7 @@ if __name__ == '__main__':
         params.checkpoint,
         params=params
     ) if os.path.isfile(params.checkpoint) else LitStructureGeoGraph(
-        net=net,
+        nn_model=net,
         learning_rate=params.learning_rate,
         params=params,
     )
@@ -81,6 +87,10 @@ if __name__ == '__main__':
         strategy=params.strategy,
         callbacks=[checkpoint_callback, lr_monitor],
         plugins=[SLURMEnvironment(requeue_signal=signal.SIGUSR1)]
+    )
+    datamodule = LightningDataset(
+        train_dataset=training_set,
+        val_dataset=validation_set
     )
     trainer.fit(
         model,
