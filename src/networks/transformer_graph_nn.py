@@ -9,7 +9,7 @@ class TransformerGraphEmbeddingCosine(nn.Module):
 
     dropout = 0
 
-    def __init__(self, node_dim=8, edge_dim=1, out_dim=640, num_layers=12):
+    def __init__(self, node_dim=8, edge_dim=1, out_dim=640, num_layers=6):
         super().__init__()
 
         self.graph_transformer = UniMP(
