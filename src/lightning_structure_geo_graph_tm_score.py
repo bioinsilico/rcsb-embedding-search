@@ -47,14 +47,8 @@ if __name__ == '__main__':
         test_classes,
         test_embedding
     )
-    validation_sampler = CustomWeightedRandomSampler(
-        weights=validation_set.weights(),
-        num_samples=1000,
-        replacement=True
-    )
     validation_dataloader = DataLoader(
         validation_set,
-        sampler=validation_sampler,
         batch_size=params.testing_batch_size,
         num_workers=params.workers,
         persistent_workers=True if params.workers > 0 else False
