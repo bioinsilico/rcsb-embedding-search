@@ -35,6 +35,8 @@ class LitStructureBase(L.LightningModule):
         self.reset_z()
 
     def on_train_epoch_end(self):
+        if len(self.z) == 0:
+            return
         z = cat(self.z, dim=0)
         z_pred = cat(self.z_pred, dim=0)
         loss = nn.functional.mse_loss(z_pred, z)
@@ -53,6 +55,7 @@ class LitStructureBase(L.LightningModule):
         else:
             roc_auc = binary_auroc(z_pred, z)
         self.log("roc_auc", roc_auc, sync_dist=True)
+        self.reset_z()
 
     def configure_optimizers(self):
         optimizer = optim.AdamW(
