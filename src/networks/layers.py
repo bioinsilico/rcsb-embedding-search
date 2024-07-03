@@ -67,7 +67,6 @@ class UniMP(nn.Module):
         for _ in range(num_layers):
             self.layers.append(GraphTransformerLayer(in_channels, out_channels, edge_channels, hidden_channels, heads))
             in_channels = out_channels
-        self.fc = nn.Linear(hidden_channels, out_channels)
 
     def forward(self, x, edge_index, edge_attr=None):
         for layer in self.layers:

@@ -1,9 +1,6 @@
-import lightning as L
-from torch import nn, optim, cat
-from torcheval.metrics.functional import binary_auprc, binary_auroc
+from torch import nn
 
 from lightning_module.lightning_base import LitStructureBase
-from src.lightning_module.utils import get_cosine_schedule_with_warmup
 
 
 class LitStructureGeoGraph(LitStructureBase):
