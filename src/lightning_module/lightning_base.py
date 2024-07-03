@@ -54,6 +54,26 @@ class LitStructureBase(L.LightningModule):
             roc_auc = binary_auroc(z_pred, z)
         self.log("roc_auc", roc_auc, sync_dist=True)
 
+    def configure_optimizers(self):
+        optimizer = optim.AdamW(
+            params=self.parameters(),
+            lr=self.learning_rate,
+            weight_decay=self.params.weight_decay if self.params.weight_decay else 0
+        )
+        lr_scheduler = get_cosine_schedule_with_warmup(
+            optimizer,
+            warmup_epochs=self.params.warmup_epochs,
+            max_epochs=self.params.epochs
+        )
+        return {
+            'optimizer': optimizer,
+            'lr_scheduler': {
+                'scheduler': lr_scheduler,
+                'interval': self.params.lr_interval,
+                'frequency': self.params.lr_frequency
+            }
+        }
+
     def reset_z(self):
         self.z = []
         self.z_pred = []
