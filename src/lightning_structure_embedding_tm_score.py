@@ -25,7 +25,7 @@ if __name__ == '__main__':
     test_classes = params.test_class_file
     test_embedding = params.test_embedding_path
 
-    training_set = TmScoreFileDataset(
+    training_set = TmScoreDataset(
         train_classes,
         train_embedding,
         score_method=fraction_score,
@@ -46,7 +46,7 @@ if __name__ == '__main__':
         collate_fn=collate_fn
     )
 
-    validation_set = TmScoreFileDataset(
+    validation_set = TmScoreDataset(
         test_classes,
         test_embedding
     )
