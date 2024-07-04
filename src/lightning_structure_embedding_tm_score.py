@@ -67,10 +67,7 @@ if __name__ == '__main__':
         nhead=params.nhead,
         num_layers=params.num_layers
     )
-    model = LitStructureEmbedding.load_from_checkpoint(
-        params.checkpoint,
-        params=params
-    ) if os.path.isfile(params.checkpoint) else LitStructureEmbedding(
+    model = LitStructureEmbedding(
         nn_model=nn_model,
         learning_rate=params.learning_rate,
         params=params,
