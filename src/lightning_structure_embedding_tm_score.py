@@ -69,10 +69,7 @@ if __name__ == '__main__':
     if os.path.isfile(params.checkpoint):
         trainer = L.Trainer()
         trainer.fit(
-            LitStructureEmbedding(
-                nn_model,
-                params=params
-            ),
+            LitStructureEmbedding(nn_model),
             train_dataloader,
             validation_dataloader,
             ckpt_path=params.checkpoint if os.path.isfile(params.checkpoint) else None
