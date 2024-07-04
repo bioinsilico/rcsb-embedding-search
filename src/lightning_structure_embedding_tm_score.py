@@ -7,12 +7,11 @@ from lightning.pytorch.profilers import PyTorchProfiler
 
 from torch.utils.data import DataLoader
 
-from src.dataset.tm_score_dataset import TmScoreDataset
-from src.dataset.tm_score_from_file_dataset import TmScoreFileDataset
-from dataset.tm_score_polars_dataset import TmScorePolarsDataset
 from dataset.utils.custom_weighted_random_sampler import CustomWeightedRandomSampler
 from dataset.utils.tm_score_weight import fraction_score, tm_score_weights
+from src.dataset.tm_score_dataset import TmScoreDataset
 from dataset.utils.tools import collate_fn
+from src.dataset.tm_score_from_file_dataset import TmScoreFileDataset
 from src.lightning_module.lightning_embedding import LitStructureEmbedding
 from src.networks.transformer_nn import TransformerEmbeddingCosine
 from src.params.structure_embedding_params import StructureEmbeddingParams
@@ -26,7 +25,7 @@ if __name__ == '__main__':
     test_classes = params.test_class_file
     test_embedding = params.test_embedding_path
 
-    training_set = TmScorePolarsDataset(
+    training_set = TmScoreDataset(
         train_classes,
         train_embedding,
         score_method=fraction_score,
@@ -47,7 +46,7 @@ if __name__ == '__main__':
         collate_fn=collate_fn
     )
 
-    validation_set = TmScorePolarsDataset(
+    validation_set = TmScoreDataset(
         test_classes,
         test_embedding
     )
@@ -66,17 +65,10 @@ if __name__ == '__main__':
         nhead=params.nhead,
         num_layers=params.num_layers
     )
-    if os.path.isfile(params.checkpoint):
-        trainer = L.Trainer()
-        trainer.fit(
-            LitStructureEmbedding(nn_model),
-            train_dataloader,
-            validation_dataloader,
-            ckpt_path=params.checkpoint if os.path.isfile(params.checkpoint) else None
-        )
-        exit(0)
-
-    model = LitStructureEmbedding(
+    model = LitStructureEmbedding.load_from_checkpoint(
+        params.checkpoint,
+        params=params
+    ) if os.path.isfile(params.checkpoint) else LitStructureEmbedding(
         nn_model=nn_model,
         learning_rate=params.learning_rate,
         params=params,
@@ -112,5 +104,6 @@ if __name__ == '__main__':
     trainer.fit(
         model,
         train_dataloader,
-        validation_dataloader
+        validation_dataloader,
+        ckpt_path=params.checkpoint if os.path.isfile(params.checkpoint) else None
     )
