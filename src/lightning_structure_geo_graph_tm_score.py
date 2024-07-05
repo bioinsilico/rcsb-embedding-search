@@ -55,10 +55,7 @@ if __name__ == '__main__':
     )
 
     net = TransformerGraphEmbeddingCosine()
-    model = LitStructureGeoGraph.load_from_checkpoint(
-        params.checkpoint,
-        params=params
-    ) if os.path.isfile(params.checkpoint) else LitStructureGeoGraph(
+    model = LitStructureGeoGraph(
         nn_model=net,
         learning_rate=params.learning_rate,
         params=params,
