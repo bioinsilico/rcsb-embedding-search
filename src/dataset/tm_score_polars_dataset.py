@@ -24,7 +24,7 @@ class TmScorePolarsDataset(Dataset):
 
     def __exec(self, tm_score_file, embedding_path):
         self.load_class_pairs(tm_score_file)
-        self.load_embedding(embedding_path)
+        self.load_embedding(tm_score_file, embedding_path)
 
     def load_class_pairs(self, tm_score_file):
         self.class_pairs = pl.DataFrame(
@@ -34,17 +34,19 @@ class TmScorePolarsDataset(Dataset):
         )
         print(f"Total pairs: {len(self.class_pairs)}")
 
-    def load_embedding(self, embedding_path):
+    def load_embedding(self, tm_score_file, embedding_path):
+
         self.embedding = pl.DataFrame(
             data=[
-                (dom_id, os.path.join(embedding_path, f"{dom_id}.pt")) for dom_id in pl.concat([
-                    self.class_pairs['domain_i'].unique(),
-                    self.class_pairs['domain_j'].unique()
-                ]).unique()
+                (dom_id, os.path.join(embedding_path, f"{dom_id}.pt")) for dom_id in list(set(
+                    [(lambda row: row.strip().split(",")[0])(row) for row in open(tm_score_file)] +
+                    [(lambda row: row.strip().split(",")[1])(row) for row in open(tm_score_file)]
+                ))
             ],
             orient="row",
             schema=['domain', 'embedding'],
         )
+        print(f"Total embedding: {len(self.embedding)}")
 
     def weights(self):
         return self.weighting_method([dp['score'] for dp in self.class_pairs.rows(named=True)])
@@ -66,7 +68,6 @@ class TmScorePolarsDataset(Dataset):
                 np.array(self.score_method(self.class_pairs.row(idx, named=True)['score']), dtype=d_type)
             )
         )
-
 
 
 if __name__ == '__main__':
