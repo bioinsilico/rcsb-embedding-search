@@ -9,12 +9,12 @@ class TransformerGraphEmbeddingCosine(nn.Module):
 
     dropout = 0
 
-    def __init__(self, node_dim=8, edge_dim=1, out_dim=640, num_layers=6):
+    def __init__(self, node_dim=4, edge_dim=8, out_dim=640, num_layers=6):
         super().__init__()
 
         self.graph_transformer = UniMP(
-            node_dim,
-            out_dim,
+            in_channels=node_dim,
+            out_channels=out_dim,
             edge_channels=edge_dim,
             num_layers=num_layers
         )
@@ -27,7 +27,7 @@ class TransformerGraphEmbeddingCosine(nn.Module):
         ]))
 
     def graph_transformer_forward(self, g):
-        x = self.graph_transformer(g.x[:, 3:11], g.edge_index, g.edge_attr[:, None])
+        x = self.graph_transformer(g.x, g.edge_index, g.edge_attr)
         return global_add_pool(x, g.batch)
 
     def forward(self, g_i, g_j):
