@@ -57,7 +57,7 @@ if __name__ == '__main__':
     )
     dataloader = DataLoader(
         dataset,
-        batch_size=8
+        batch_size=1
     )
     model = TransformerGraphEmbeddingCosine()
     for g_i, g_j, z in dataloader:

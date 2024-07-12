@@ -61,7 +61,7 @@ class GraphTransformerLayer(nn.Module):
 
 
 class UniMP(nn.Module):
-    def __init__(self, in_channels=4, out_channels=640, edge_channels=8, hidden_channels=1280, num_layers=6, heads=10):
+    def __init__(self, in_channels=4, out_channels=640, edge_channels=8, hidden_channels=1280, num_layers=6, heads=1):
         super(UniMP, self).__init__()
         self.layers = nn.ModuleList()
         in_heads = 1
