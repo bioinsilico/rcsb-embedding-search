@@ -44,8 +44,6 @@ class LitStructureEmbedding(L.LightningModule):
         return nn.functional.mse_loss(z_pred, z)
 
     def on_train_epoch_end(self):
-        if len(self.z) == 0:
-            return
         self.train_loss()
 
     def on_validation_epoch_start(self):
@@ -92,6 +90,8 @@ class LitStructureEmbedding(L.LightningModule):
         }
 
     def train_loss(self):
+        if len(self.z) == 0:
+            return
         z = cat(self.z, dim=0)
         z_pred = cat(self.z_pred, dim=0)
         loss = nn.functional.mse_loss(z_pred, z)
