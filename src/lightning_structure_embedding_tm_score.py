@@ -97,6 +97,7 @@ if __name__ == '__main__':
         strategy=params.strategy,
         callbacks=[checkpoint_callback, lr_monitor],
         plugins=[SLURMEnvironment(requeue_signal=signal.SIGUSR1)],
+        default_root_dir=params.default_root_dir if os.path.isdir(params.default_root_dir) else None,
         profiler=profiler
     )
 
