@@ -34,6 +34,7 @@ class StructureEmbeddingParams:
         self.parser.add_argument('--strategy', type=str)
 
         self.parser.add_argument('--checkpoint', type=str)
+        self.parser.add_argument('--default_root_dir', type=str)
         self.parser.add_argument('--metadata', type=str)
 
         self.parser.add_argument('--profiler_file', type=str)
@@ -63,6 +64,7 @@ class StructureEmbeddingParams:
 
         self.metadata = args.metadata if args.metadata else "None"
         self.checkpoint = args.checkpoint if args.checkpoint else "None"
+        self.default_root_dir = args.default_root_dir if args.default_root_dir else "None"
 
         self.profiler_file = args.profiler_file if args.profiler_file else None
 

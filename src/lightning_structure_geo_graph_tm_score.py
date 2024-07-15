@@ -77,7 +77,8 @@ if __name__ == '__main__':
         devices=params.devices,
         strategy=params.strategy,
         callbacks=[checkpoint_callback, lr_monitor],
-        plugins=[SLURMEnvironment(requeue_signal=signal.SIGUSR1)]
+        plugins=[SLURMEnvironment(requeue_signal=signal.SIGUSR1)],
+        default_root_dir=params.default_root_dir if os.path.isdir(params.default_root_dir) else None
     )
     datamodule = LightningDataset(
         train_dataset=training_set,
