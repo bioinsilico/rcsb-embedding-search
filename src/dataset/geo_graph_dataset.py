@@ -36,7 +36,7 @@ class GeoGraphDataset(Dataset):
         print(f"Total graphs: {len(self.graphs)}")
 
     def weights(self):
-        return self.weighting_method([dp[0] for dp in self.class_pairs])
+        return self.weighting_method([dp['score'] for dp in self.class_pairs.iter_rows(named=True)])
 
     def len(self):
         return len(self.class_pairs)
@@ -64,6 +64,7 @@ if __name__ == '__main__':
         score_method=fraction_score,
         weighting_method=tm_score_weights(5)
     )
+    dataset.weights()
     dataloader = DataLoader(
         dataset,
         batch_size=1
