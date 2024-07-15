@@ -2,6 +2,7 @@ import numpy as np
 import torch
 from torch_geometric.data import Dataset
 from torch_geometric.loader import DataLoader
+import polars as pl
 
 from dataset.utils.tm_score_weight import binary_score, binary_weights, fraction_score, tm_score_weights
 from dataset.utils.tools import load_class_pairs, load_tensors
@@ -16,22 +17,23 @@ class GeoGraphDataset(Dataset):
 
     def __init__(self, tm_score_file, geo_graph_path, score_method=None, weighting_method=None):
         super().__init__()
-        self.graphs = {}
-        self.domains = set({})
-        self.class_pairs = list()
+        self.graphs = pl.DataFrame()
+        self.class_pairs = pl.DataFrame()
         self.score_method = binary_score(self.BINARY_THR) if not score_method else score_method
         self.weighting_method = binary_weights(self.BINARY_THR) if not weighting_method else weighting_method
         self.__exec(tm_score_file, geo_graph_path)
 
     def __exec(self, tm_score_file, geo_graph_path):
         self.load_class_pairs(tm_score_file)
-        self.load_graphs(geo_graph_path)
+        self.load_graphs(geo_graph_path, tm_score_file)
 
     def load_class_pairs(self, tm_score_file):
-        self.domains, self.class_pairs = load_class_pairs(tm_score_file)
+        self.class_pairs = load_class_pairs(tm_score_file)
+        print(f"Total pairs: {len(self.class_pairs)}")
 
-    def load_graphs(self, geo_graph_path):
-        self.graphs = load_tensors(geo_graph_path, self.domains)
+    def load_graphs(self, geo_graph_path, tm_score_file):
+        self.graphs = load_tensors(geo_graph_path, tm_score_file)
+        print(f"Total graphs: {len(self.graphs)}")
 
     def weights(self):
         return self.weighting_method([dp[0] for dp in self.class_pairs])
@@ -40,12 +42,19 @@ class GeoGraphDataset(Dataset):
         return len(self.class_pairs)
 
     def get(self, idx):
-        graph_i = self.graphs[self.class_pairs[idx][1]]
-        graph_j = self.graphs[self.class_pairs[idx][2]]
-        score = self.score_method(self.class_pairs[idx][0])
-        label = torch.from_numpy(np.array(score, dtype=d_type))
-
-        return graph_i, graph_j, label
+        return (
+            torch.load(self.graphs.row(
+                by_predicate=(pl.col("domain") == self.class_pairs.row(idx, named=True)['domain_i']),
+                named=True
+            )['embedding']),
+            torch.load(self.graphs.row(
+                by_predicate=(pl.col("domain") == self.class_pairs.row(idx, named=True)['domain_j']),
+                named=True
+            )['embedding']),
+            torch.from_numpy(
+                np.array(self.score_method(self.class_pairs.row(idx, named=True)['score']), dtype=d_type)
+            )
+        )
 
 
 if __name__ == '__main__':

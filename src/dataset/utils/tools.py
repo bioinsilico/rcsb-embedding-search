@@ -1,31 +1,28 @@
 import os
 import torch
+import polars as pl
+from polars import Schema, String, Float32
 
 
 def load_class_pairs(tm_score_file):
-    domains = set({})
-    class_pairs = []
-    for row in open(tm_score_file):
-        r = row.strip().split(",")
-        dom_i = r[0]
-        dom_j = r[1]
-        tm_score = float(r[2])
-        domains.add(dom_i)
-        domains.add(dom_j)
-        class_pairs.append([
-            tm_score,
-            dom_i,
-            dom_j
-        ])
-    print(f"Total pairs: {len(class_pairs)}")
-    return domains, class_pairs
+    return pl.DataFrame(
+        data=[(lambda row: row.strip().split(","))(row) for row in open(tm_score_file)],
+        orient="row",
+        schema=Schema({'domain_i': String, 'domain_j': String, 'score': Float32})
+    )
 
 
-def load_tensors(tensor_path, file_name_list):
-    data_map = {}
-    for dom_id in file_name_list:
-        data_map[dom_id] = torch.load(os.path.join(tensor_path, f"{dom_id}.pt"))
-    return data_map
+def load_tensors(tensor_path, tm_score_file):
+    return pl.DataFrame(
+        data=[
+            (dom_id, os.path.join(tensor_path, f"{dom_id}.pt")) for dom_id in list(set(
+                [(lambda row: row.strip().split(",")[0])(row) for row in open(tm_score_file)] +
+                [(lambda row: row.strip().split(",")[1])(row) for row in open(tm_score_file)]
+            ))
+        ],
+        orient="row",
+        schema=['domain', 'embedding'],
+    )
 
 
 def collate_seq_embeddings(batch_list):
@@ -72,6 +69,3 @@ def triplet_collate_fn(tuple_list):
         collate_seq_embeddings([y for x, y, z in tuple_list]),
         collate_seq_embeddings([z for x, y, z in tuple_list])
     )
-
-
-
