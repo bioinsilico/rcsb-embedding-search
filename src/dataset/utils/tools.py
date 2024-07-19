@@ -30,25 +30,29 @@ def collate_seq_embeddings(batch_list):
     Pads the tensors in a batch to the same size.
 
     Args:
-        batch_list: A list of samples.
+        batch_list (list of torch.Tensor): A list of samples, where each sample is a tensor of shape (sequence_length, embedding_dim).
 
     Returns:
-        A batch tensor.
+        tuple: A tuple containing:
+            - padded_batch (torch.Tensor): A tensor of shape (batch_size, max_seq_length, embedding_dim), where each sample is padded to the max sequence length.
+            - mask_batch (torch.Tensor): A tensor of shape (batch_size, max_seq_length) where padded positions are marked as False.
     """
-    max_len = max([len(sample) for sample in batch_list])
-    dim = batch_list[0].shape[1]
-    padded_batch = []
-    mask_batch = []
-    for sample in batch_list:
-        padded_sample = torch.zeros([max_len, dim])
-        padded_sample[:len(sample)] = sample
-        padded_batch.append(padded_sample)
+    device = batch_list[0].device  # Get the device of the input tensors
+    max_len = max(sample.size(0) for sample in batch_list)  # Determine the maximum sequence length
+    dim = batch_list[0].size(1)  # Determine the embedding dimension
+    batch_size = len(batch_list)  # Determine the batch size
 
-        mask_sample = torch.ones([max_len])
-        mask_sample[:len(sample)] = torch.zeros([len(sample)])
-        mask_batch.append(mask_sample.bool())
+    # Initialize tensors for the padded batch and masks on the same device as the input tensors
+    padded_batch = torch.zeros((batch_size, max_len, dim), dtype=batch_list[0].dtype, device=device)
+    mask_batch = torch.ones((batch_size, max_len), dtype=torch.bool, device=device)
 
-    return torch.stack(padded_batch, dim=0), torch.stack(mask_batch, dim=0)
+    for i, sample in enumerate(batch_list):
+        seq_len = sample.size(0)  # Get the length of the current sequence
+        padded_batch[i, :seq_len] = sample  # Pad the sequence with zeros
+        mask_batch[i, :seq_len] = False  # Set mask positions for the actual data to False
+
+    return padded_batch, mask_batch
+
 
 
 def collate_label(label_list):
