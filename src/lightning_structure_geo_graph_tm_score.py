@@ -11,7 +11,7 @@ from dataset.geo_graph_dataset import GeoGraphDataset
 from dataset.utils.custom_weighted_random_sampler import CustomWeightedRandomSampler
 from dataset.utils.tm_score_weight import fraction_score, tm_score_weights
 from lightning_module.lightning_geo_graph import LitStructureGeoGraph
-from networks.transformer_graph_nn import TransformerGraphEmbeddingCosine
+from networks.transformer_graph_nn import TransformerGraphEmbeddingCosine, BiTransformerGraphEmbeddingCosine
 from src.params.structure_embedding_params import StructureEmbeddingParams
 
 if __name__ == '__main__':
@@ -54,7 +54,7 @@ if __name__ == '__main__':
         persistent_workers=True if params.workers > 0 else False
     )
 
-    net = TransformerGraphEmbeddingCosine()
+    net = BiTransformerGraphEmbeddingCosine()
     model = LitStructureGeoGraph(
         nn_model=net,
         learning_rate=params.learning_rate,

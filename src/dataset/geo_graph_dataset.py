@@ -6,7 +6,7 @@ import polars as pl
 
 from dataset.utils.tm_score_weight import binary_score, binary_weights, fraction_score, tm_score_weights
 from dataset.utils.tools import load_class_pairs, load_tensors
-from networks.transformer_graph_nn import TransformerGraphEmbeddingCosine
+from networks.transformer_graph_nn import TransformerGraphEmbeddingCosine, BiTransformerGraphEmbeddingCosine
 
 d_type = np.float32
 
@@ -67,9 +67,9 @@ if __name__ == '__main__':
     dataset.weights()
     dataloader = DataLoader(
         dataset,
-        batch_size=1
+        batch_size=8
     )
-    model = TransformerGraphEmbeddingCosine()
+    model = BiTransformerGraphEmbeddingCosine()
     for g_i, g_j, z in dataloader:
         p = model(g_i, g_j)
         print(p.shape, z.shape, z)
