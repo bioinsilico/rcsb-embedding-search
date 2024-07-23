@@ -55,8 +55,8 @@ class LitStructureDualEmbedding(L.LightningModule):
         self.reset_z()
 
     def validation_step(self, batch, batch_idx):
-        (x, x_mask), (y, y_mask),  (z_max, z_min) = batch
-        self.z.append(z_max)
+        (x, x_mask), (y, y_mask), z = batch
+        self.z.append(z)
         z_max_pred, z_min_pred = self.model(x, x_mask, y, y_mask)
         self.z_pred.append(z_max_pred)
 
