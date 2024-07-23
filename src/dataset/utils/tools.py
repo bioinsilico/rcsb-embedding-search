@@ -54,9 +54,12 @@ def collate_seq_embeddings(batch_list):
     return padded_batch, mask_batch
 
 
-
 def collate_label(label_list):
     return torch.stack(label_list, dim=0)
+
+
+def collate_dual_label(label_list):
+    return torch.stack([x for x, y in label_list], dim=0), torch.stack([y for x, y in label_list], dim=0),
 
 
 def collate_fn(tuple_list):
@@ -64,6 +67,14 @@ def collate_fn(tuple_list):
         collate_seq_embeddings([x for x, y, z in tuple_list]),
         collate_seq_embeddings([y for x, y, z in tuple_list]),
         collate_label([z for x, y, z in tuple_list]),
+    )
+
+
+def collate_dual_fn(tuple_list):
+    return (
+        collate_seq_embeddings([x for x, y, z in tuple_list]),
+        collate_seq_embeddings([y for x, y, z in tuple_list]),
+        collate_dual_label([z for x, y, z in tuple_list]),
     )
 
 
