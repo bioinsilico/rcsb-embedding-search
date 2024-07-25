@@ -60,7 +60,7 @@ if __name__ == '__main__':
         collate_fn=collate_fn
     )
 
-    nn_model = TransformerResBlockEmbeddingCosine(
+    nn_model = TransformerEmbeddingCosine(
         input_features=params.input_layer,
         dim_feedforward=params.dim_feedforward,
         hidden_layer=params.hidden_layer,
