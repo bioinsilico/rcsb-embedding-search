@@ -1,4 +1,5 @@
 import torch.nn as nn
+from torch import norm
 from collections import OrderedDict
 
 
@@ -24,10 +25,18 @@ class LinearEmbeddingCosine(nn.Module):
 
 
 class TransformerEmbeddingCosine(nn.Module):
-    dropout = 0.1
 
-    def __init__(self, input_features=1280, dim_feedforward=2048, hidden_layer=1280, nhead=8, num_layers=6):
+    def __init__(
+            self,
+            input_features=1280,
+            dim_feedforward=2048,
+            hidden_layer=1280,
+            nhead=10,
+            num_layers=6,
+            dropout=0.1
+    ):
         super().__init__()
+        self.dropout = dropout
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=input_features,
             nhead=nhead,
@@ -44,10 +53,12 @@ class TransformerEmbeddingCosine(nn.Module):
         ]))
 
     def forward(self, x, x_mask, y, y_mask):
+        x_emb = self.embedding(self.transformer(x, src_key_padding_mask=x_mask).sum(dim=1))
+        y_emb = self.embedding(self.transformer(y, src_key_padding_mask=y_mask).sum(dim=1))
         return nn.functional.cosine_similarity(
-            self.embedding(self.transformer(x, src_key_padding_mask=x_mask).sum(dim=1)),
-            self.embedding(self.transformer(y, src_key_padding_mask=y_mask).sum(dim=1))
-        )
+            self.embedding(x_emb),
+            self.embedding(y_emb)
+        ), norm(x_emb, p=2, dim=1), norm(y_emb, p=2, dim=1)
 
     def get_weights(self):
         return [(name, param) for name, param in self.embedding.named_parameters()]
