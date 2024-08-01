@@ -10,7 +10,7 @@ from dataset.utils.biopython_getter import get_coords_from_pdb_file
 from dataset.utils.custom_weighted_random_sampler import CustomWeightedRandomSampler
 from dataset.utils.embedding_builder import embedding_builder
 from dataset.utils.tm_score_weight import binary_score, binary_weights, fraction_score, tm_score_weights
-from dataset.utils.tools import load_class_pairs
+from dataset.utils.tools import load_class_pairs, collate_fn
 
 d_type = np.float32
 
@@ -114,7 +114,8 @@ if __name__ == '__main__':
     dataloader = DataLoader(
         dataset,
         batch_size=8,
-        sampler=sampler
+        sampler=sampler,
+        collate_fn=collate_fn
     )
-    for x, y, z in dataloader:
+    for (x, x_mask), (y, y_mask), z in dataloader:
         print(x.shape, y.shape, z.shape)
