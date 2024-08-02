@@ -171,10 +171,11 @@ def get_model(cls, model_name, **model_args):
 @torch.no_grad()
 def load_pst_model(cfg):
     pretrained_path = Path(cfg['model_path'])
+    device = cfg['device'] if 'device' in cfg else ('gpu' if torch.cuda.is_available() else 'cpu')
     model, model_cfg = PST.from_checkpoint(
         pretrained_path,
-        map_location=torch.device(cfg['device']),
+        map_location=torch.device(device),
     )
+    model.to(device)
     model.eval()
-    model.to(cfg['device'])
     return model

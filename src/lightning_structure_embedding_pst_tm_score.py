@@ -7,11 +7,12 @@ from torch_geometric.data.lightning import LightningDataset
 
 from torch_geometric.loader import DataLoader
 
-from dataset.geo_graph_dataset import GeoGraphDataset
+from dataset.pst.pst import load_pst_model
+from dataset.tm_score_from_coord_dataset import TmScoreFromCoordDataset
 from dataset.utils.custom_weighted_random_sampler import CustomWeightedRandomSampler
 from dataset.utils.tm_score_weight import fraction_score, tm_score_weights
 from lightning_module.lightning_batch_graph import LitStructureBatchGraph
-from networks.transformer_graph_nn import TransformerGraphEmbeddingCosine, BiTransformerGraphEmbeddingCosine
+from networks.transformer_pst import TransformerPstEmbeddingCosine
 from src.params.structure_embedding_params import StructureEmbeddingParams
 
 if __name__ == '__main__':
@@ -23,7 +24,7 @@ if __name__ == '__main__':
     test_classes = params.test_class_file
     test_embedding = params.test_embedding_path
 
-    training_set = GeoGraphDataset(
+    training_set = TmScoreFromCoordDataset(
         train_classes,
         train_embedding,
         score_method=fraction_score,
@@ -43,7 +44,7 @@ if __name__ == '__main__':
         persistent_workers=True if params.workers > 0 else False
     )
 
-    validation_set = GeoGraphDataset(
+    validation_set = TmScoreFromCoordDataset(
         test_classes,
         test_embedding
     )
@@ -53,10 +54,19 @@ if __name__ == '__main__':
         num_workers=params.workers,
         persistent_workers=True if params.workers > 0 else False
     )
-
-    net = BiTransformerGraphEmbeddingCosine()
+    pst_model = load_pst_model({
+        'model_path': params.pst_model_path
+    })
+    nn_model = TransformerPstEmbeddingCosine(
+        pst_model=pst_model,
+        input_features=params.input_layer,
+        dim_feedforward=params.dim_feedforward,
+        hidden_layer=params.hidden_layer,
+        nhead=params.nhead,
+        num_layers=params.num_layers
+    )
     model = LitStructureBatchGraph(
-        nn_model=net,
+        nn_model=nn_model,
         learning_rate=params.learning_rate,
         params=params,
     )

@@ -3,7 +3,7 @@ from torch import nn
 from lightning_module.lightning_base import LitStructureBase
 
 
-class LitStructureGeoGraph(LitStructureBase):
+class LitStructureBatchGraph(LitStructureBase):
 
     def __init__(
             self,
