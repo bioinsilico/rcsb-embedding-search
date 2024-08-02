@@ -1,16 +1,19 @@
+import argparse
 import os
 
 import numpy as np
-from torch.utils.data import Dataset, DataLoader
+from torch_geometric.data import Dataset
+from torch_geometric.loader import DataLoader
 import polars as pl
 import torch
 
 from dataset.pst.pst import load_pst_model
 from dataset.utils.biopython_getter import get_coords_from_pdb_file
 from dataset.utils.custom_weighted_random_sampler import CustomWeightedRandomSampler
-from dataset.utils.embedding_builder import embedding_builder
+from dataset.utils.embedding_builder import graph_builder
 from dataset.utils.tm_score_weight import binary_score, binary_weights, fraction_score, tm_score_weights
 from dataset.utils.tools import load_class_pairs, collate_fn
+from networks.transformer_pst import TransformerPstEmbeddingCosine
 
 d_type = np.float32
 
@@ -22,17 +25,16 @@ class TmScoreFromCoordDataset(Dataset):
             self,
             tm_score_file,
             coords_path,
-            pst_model,
             ext="ent",
             score_method=None,
             weighting_method=None,
             add_change=lambda *abc: abc
     ):
+        super().__init__()
         self.coords = pl.DataFrame()
         self.class_pairs = pl.DataFrame()
         self.score_method = binary_score(self.BINARY_THR) if not score_method else score_method
         self.weighting_method = binary_weights(self.BINARY_THR) if not weighting_method else weighting_method
-        self.pst_model = pst_model
         self.add_change = add_change
         self.__exec(tm_score_file, coords_path, f".{ext}" if len(ext) > 0 else "")
 
@@ -67,25 +69,24 @@ class TmScoreFromCoordDataset(Dataset):
     def weights(self):
         return self.weighting_method([dp['score'] for dp in self.class_pairs.rows(named=True)])
 
-    def __build_embedding(self, dom_id):
+    def __build_graph(self, dom_id):
         coords_i = self.coords.row(
             by_predicate=(pl.col("domain") == dom_id),
             named=True
         )
-        out = embedding_builder(
+        out = graph_builder(
             [{'cas': ch[0], 'seq': ch[1]} for ch in zip(coords_i['cas'], coords_i['seq'])],
-            self.pst_model,
             add_change=self.add_change
         )
         return out
 
-    def __len__(self):
+    def len(self):
         return len(self.class_pairs)
 
-    def __getitem__(self, idx):
+    def get(self, idx):
         return (
-            self.__build_embedding(self.class_pairs.row(idx, named=True)['domain_i']),
-            self.__build_embedding(self.class_pairs.row(idx, named=True)['domain_j']),
+            self.__build_graph(self.class_pairs.row(idx, named=True)['domain_i']),
+            self.__build_graph(self.class_pairs.row(idx, named=True)['domain_j']),
             torch.from_numpy(
                 np.array(self.score_method(self.class_pairs.row(idx, named=True)['score']), dtype=d_type)
             )
@@ -93,14 +94,15 @@ class TmScoreFromCoordDataset(Dataset):
 
 
 if __name__ == '__main__':
-    model = load_pst_model({
-        'model_path': '/Users/joan/devel/rcsb-embedding-search/src/dataset/pst/.cache/pst/pst_t30_so.pt',
-        'device': 'cpu'
-    })
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--tm_score_file', type=str, required=True)
+    parser.add_argument('--pdb_path', type=str, required=True)
+    parser.add_argument('--pst_model_path', type=str, required=True)
+    args = parser.parse_args()
+
     dataset = TmScoreFromCoordDataset(
-        '/Users/joan/data/cath_23M/cath_23M.csv',
-        '/Users/joan/cs-data/structure-embedding/cath_S40/pdb',
-        pst_model=model,
+        args.tm_score_file,
+        args.pdb_path,
         ext="",
         weighting_method=tm_score_weights(5),
         score_method=fraction_score
@@ -117,5 +119,11 @@ if __name__ == '__main__':
         sampler=sampler,
         collate_fn=collate_fn
     )
-    for (x, x_mask), (y, y_mask), z in dataloader:
-        print(x.shape, y.shape, z.shape)
+    pst_model = load_pst_model({
+        'model_path': args.pst_model_path,
+        'device': 'cpu'
+    })
+    model = TransformerPstEmbeddingCosine(pst_model)
+    for (g_i), (g_j), z in dataloader:
+        z_pred = model(g_i, g_j)
+        print(z_pred.shape, z.shape)

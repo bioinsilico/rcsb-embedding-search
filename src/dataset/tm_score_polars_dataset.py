@@ -1,3 +1,5 @@
+import argparse
+
 import torch
 from polars import Schema, String, Float32
 from torch.utils.data import Dataset, DataLoader
@@ -71,9 +73,14 @@ class TmScorePolarsDataset(Dataset):
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--tm_score_file', type=str, required=True)
+    parser.add_argument('--embedding_path', type=str, required=True)
+    args = parser.parse_args()
+
     dataset = TmScorePolarsDataset(
-        '/Users/joan/data/cath_23M/cath_23M_ch_ids.csv',
-        '/Users/joan/cs-data/structure-embedding/pst_t30_so/cath_S40/embedding',
+        args.tm_score_file,
+        args.embedding_path,
         score_method=fraction_score,
         weighting_method=tm_score_weights(5)
     )

@@ -1,3 +1,5 @@
+import argparse
+
 import numpy as np
 import torch
 from torch_geometric.data import Dataset
@@ -6,7 +8,7 @@ import polars as pl
 
 from dataset.utils.tm_score_weight import binary_score, binary_weights, fraction_score, tm_score_weights
 from dataset.utils.tools import load_class_pairs, load_tensors
-from networks.transformer_graph_nn import TransformerGraphEmbeddingCosine, BiTransformerGraphEmbeddingCosine
+from networks.transformer_graph_nn import BiTransformerGraphEmbeddingCosine
 
 d_type = np.float32
 
@@ -58,9 +60,14 @@ class GeoGraphDataset(Dataset):
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--tm_score_file', type=str, required=True)
+    parser.add_argument('--graph_path', type=str, required=True)
+    args = parser.parse_args()
+
     dataset = GeoGraphDataset(
-        "/Users/joan/data/cath_23M/cath_23M.csv",
-        "/Users/joan/cs-data/structure-embedding/cath_S40/graph-geo",
+        args.tm_score_file,
+        args.graph_path,
         score_method=fraction_score,
         weighting_method=tm_score_weights(5)
     )

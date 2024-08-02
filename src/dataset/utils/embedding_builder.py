@@ -11,6 +11,20 @@ from torch_geometric.utils import unbatch
 ESM_ALPHABET = esm.data.Alphabet.from_architecture("ESM-1b")
 
 
+def graph_builder(coords, eps=8, num_workers=1, add_change=lambda *x: x):
+    random.shuffle(coords)
+    structure, sequence = add_change(
+        [xyz for ch in coords for xyz in ch['cas']],
+        [aa for ch in coords for aa in ch['seq']]
+    )
+    return __graph_builder(
+        torch.from_numpy(np.array(structure)),
+        "".join(sequence),
+        eps,
+        num_workers
+    )
+
+
 def embedding_builder(coords, pst_model, eps=8, num_workers=1, add_change=lambda *x: x):
     random.shuffle(coords)
     structure, sequence = add_change(
