@@ -27,6 +27,7 @@ if __name__ == '__main__':
     training_set = TmScoreFromCoordDataset(
         train_classes,
         train_embedding,
+        ext="",
         score_method=fraction_score,
         weighting_method=tm_score_weights(5)
     )
@@ -46,7 +47,8 @@ if __name__ == '__main__':
 
     validation_set = TmScoreFromCoordDataset(
         test_classes,
-        test_embedding
+        test_embedding,
+        ext="pdb"
     )
     validation_dataloader = DataLoader(
         validation_set,

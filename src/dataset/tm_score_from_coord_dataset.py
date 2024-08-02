@@ -28,7 +28,8 @@ class TmScoreFromCoordDataset(Dataset):
             ext="ent",
             score_method=None,
             weighting_method=None,
-            add_change=lambda *abc: abc
+            add_change=lambda *abc: abc,
+            num_workers=1
     ):
         super().__init__()
         self.coords = pl.DataFrame()
@@ -36,6 +37,7 @@ class TmScoreFromCoordDataset(Dataset):
         self.score_method = binary_score(self.BINARY_THR) if not score_method else score_method
         self.weighting_method = binary_weights(self.BINARY_THR) if not weighting_method else weighting_method
         self.add_change = add_change
+        self.nun_workers = num_workers if num_workers > 1 else 1
         self.__exec(tm_score_file, coords_path, f".{ext}" if len(ext) > 0 else "")
 
     def __exec(self, tm_score_file, embedding_path, ext):
@@ -76,7 +78,8 @@ class TmScoreFromCoordDataset(Dataset):
         )
         out = graph_builder(
             [{'cas': ch[0], 'seq': ch[1]} for ch in zip(coords_i['cas'], coords_i['seq'])],
-            add_change=self.add_change
+            add_change=self.add_change,
+            num_workers=self.nun_workers
         )
         return out
 
