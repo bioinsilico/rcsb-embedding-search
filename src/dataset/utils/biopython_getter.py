@@ -16,8 +16,6 @@ def __get_coords_from_pdb_file(structure):
     for ch in chains:
         ca_atoms = [atom for atom in structure.get_atoms() if
                     atom.get_name() == "CA" and is_aa(atom.parent.resname) and atom.parent.parent.id == ch]
-        if len(ca_atoms) < 10:
-            continue
         coords.append({
             'cas': [atom.get_coord().tolist() for atom in ca_atoms],
             'seq':  [protein_letters_3to1_extended[c.parent.resname] for c in ca_atoms],
