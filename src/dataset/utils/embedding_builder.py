@@ -7,7 +7,6 @@ import torch_geometric.nn as gnn
 from torch_geometric.data import Data, Batch
 from torch_geometric.utils import unbatch
 
-
 ESM_ALPHABET = esm.data.Alphabet.from_architecture("ESM-1b")
 
 
@@ -46,27 +45,6 @@ def embedding_builder(coords, pst_model, eps=8, num_workers=1, add_change=lambda
         embedding[graph.idx_mask],
         graph.batch[graph.idx_mask]
     )[0]
-
-
-def no_change(*lists):
-    return lists
-
-
-def remove_random_residues(n):
-    def __remove_n_random_elements_from_multiple_lists(*lists):
-        if not lists:
-            raise ValueError("At least one list must be provided")
-        list_lengths = [len(lst) for lst in lists]
-        if any(length < n for length in list_lengths):
-            raise ValueError("n cannot be greater than the length of any of the lists")
-        indices_to_remove = random.sample(range(list_lengths[0]), n)
-        print(indices_to_remove)
-        for lst in lists:
-            for index in sorted(indices_to_remove, reverse=True):
-                del lst[index]
-        return lists
-
-    return __remove_n_random_elements_from_multiple_lists
 
 
 def __graph_builder(structure, sequence, eps=8, num_workers=1):
