@@ -2,6 +2,7 @@
 import torch.nn as nn
 from collections import OrderedDict
 
+from torch import norm
 from torch_geometric.utils import unbatch
 
 from dataset.utils.tools import collate_seq_embeddings
@@ -74,10 +75,12 @@ class TransformerPstEmbeddingCosine(nn.Module):
         y_batch, y_mask = self.graph_transformer_forward(g_j)
         if x_batch.shape[0] != y_batch.shape[0]:
             print("ERROR!!!")
+        x_emb = self.embedding(self.transformer(x_batch, src_key_padding_mask=x_mask).sum(dim=1))
+        y_emb = self.embedding(self.transformer(y_batch, src_key_padding_mask=y_mask).sum(dim=1))
         return nn.functional.cosine_similarity(
-            self.embedding(self.transformer(x_batch, src_key_padding_mask=x_mask).sum(dim=1)),
-            self.embedding(self.transformer(y_batch, src_key_padding_mask=y_mask).sum(dim=1))
-        )
+            self.embedding(x_emb.sum(dim=1)),
+            self.embedding(y_emb.sum(dim=1))
+        ), norm(x_emb, p=2, dim=1), norm(y_emb, p=2, dim=1)
 
     def get_weights(self):
         return [(name, param) for name, param in self.embedding.named_parameters()]

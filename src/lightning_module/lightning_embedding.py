@@ -12,8 +12,8 @@ class LitStructureEmbedding(LitStructureBase):
             unit_norm_scale=1e-2,
             params=None
     ):
-        self.unit_norm_scale = unit_norm_scale
         super().__init__(nn_model, learning_rate, params)
+        self.unit_norm_scale = unit_norm_scale
 
     def training_step(self, batch, batch_idx):
         (x, x_mask), (y, y_mask), z = batch

@@ -74,7 +74,8 @@ if __name__ == '__main__':
     model = LitStructurePstGraph(
         nn_model=nn_model,
         learning_rate=params.learning_rate,
-        params=params,
+        unit_norm_scale=1e-2,
+        params=params
     )
 
     checkpoint_callback = L.pytorch.callbacks.ModelCheckpoint(
