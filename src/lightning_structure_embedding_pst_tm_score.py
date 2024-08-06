@@ -10,6 +10,7 @@ from torch_geometric.loader import DataLoader as GraphDataLoader
 from dataset.pst.pst import load_pst_model
 from dataset.tm_score_from_coord_dataset import TmScoreFromCoordDataset
 from dataset.tm_score_polars_dataset import TmScorePolarsDataset
+from dataset.utils.coords_augmenter import SelfAugmenterRandomFraction
 from dataset.utils.custom_weighted_random_sampler import CustomWeightedRandomSampler
 from dataset.utils.tm_score_weight import fraction_score, tm_score_weights
 from dataset.utils.tools import collate_fn
@@ -32,7 +33,11 @@ if __name__ == '__main__':
         ext="",
         score_method=fraction_score,
         weighting_method=tm_score_weights(5),
-        num_workers=params.workers
+        num_workers=params.workers,
+        coords_augmenter=SelfAugmenterRandomFraction(
+            fraction=0.1,
+            max_remove=10
+        )
     )
     weights = training_set.weights()
     sampler = CustomWeightedRandomSampler(

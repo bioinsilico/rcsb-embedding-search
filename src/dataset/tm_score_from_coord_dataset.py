@@ -9,7 +9,7 @@ import torch
 
 from dataset.pst.pst import load_pst_model
 from dataset.utils.biopython_getter import get_coords_from_pdb_file
-from dataset.utils.coords_augmenter import NullAugmenter, SelfAugmenter, AbstractAugmenter
+from dataset.utils.coords_augmenter import NullAugmenter, AbstractAugmenter, SelfAugmenterRandomFraction
 from dataset.utils.custom_weighted_random_sampler import CustomWeightedRandomSampler
 from dataset.utils.embedding_builder import graph_builder
 from dataset.utils.tm_score_weight import binary_score, binary_weights, fraction_score, tm_score_weights
@@ -118,7 +118,10 @@ if __name__ == '__main__':
         ext="",
         weighting_method=tm_score_weights(5),
         score_method=fraction_score,
-        coords_augmenter=SelfAugmenter(5),
+        coords_augmenter=SelfAugmenterRandomFraction(
+            fraction=0.1,
+            max_remove=10
+        )
     )
     weights = dataset.weights()
     sampler = CustomWeightedRandomSampler(
