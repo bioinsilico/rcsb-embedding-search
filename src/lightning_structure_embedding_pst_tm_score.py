@@ -2,6 +2,7 @@ import os.path
 import signal
 
 import lightning as L
+from lightning import seed_everything
 from lightning.pytorch.plugins.environments import SLURMEnvironment
 from torch.utils.data import DataLoader
 
@@ -19,6 +20,7 @@ from networks.transformer_pst import TransformerPstEmbeddingCosine
 from src.params.structure_embedding_params import StructureEmbeddingParams
 
 if __name__ == '__main__':
+    seed_everything(42, workers=True)
 
     params = StructureEmbeddingParams()
 
@@ -99,7 +101,8 @@ if __name__ == '__main__':
         strategy=params.strategy,
         callbacks=[checkpoint_callback, lr_monitor],
         plugins=[SLURMEnvironment(requeue_signal=signal.SIGUSR1)],
-        default_root_dir=params.default_root_dir if os.path.isdir(params.default_root_dir) else None
+        default_root_dir=params.default_root_dir if os.path.isdir(params.default_root_dir) else None,
+        deterministic=True
     )
     trainer.fit(
         model,
