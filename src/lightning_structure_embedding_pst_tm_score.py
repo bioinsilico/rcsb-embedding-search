@@ -68,7 +68,8 @@ if __name__ == '__main__':
         dim_feedforward=params.dim_feedforward,
         hidden_layer=params.hidden_layer,
         nhead=params.nhead,
-        num_layers=params.num_layers
+        num_layers=params.num_layers,
+        res_block_layers=params.res_block_layers
     )
     model = LitStructurePstGraph(
         nn_model=nn_model,
