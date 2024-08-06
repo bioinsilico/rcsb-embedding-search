@@ -2,6 +2,8 @@ import torch.nn as nn
 from torch import norm
 from collections import OrderedDict
 
+from networks.layers import ResBlock
+
 
 class LinearEmbeddingCosine(nn.Module):
 
@@ -121,24 +123,3 @@ class TransformerEmbedding(nn.Module):
     def get_weights(self):
         return [(name, param) for name, param in self.embedding.named_parameters()]
 
-
-class ResBlock(nn.Module):
-    def __init__(self, in_dim, out_dim, dropout=0.1):
-        super().__init__()
-        self.residual = nn.Identity()
-        self.block = nn.Sequential(
-            nn.LayerNorm(in_dim),
-            nn.Dropout(p=dropout),
-            nn.Linear(in_dim, out_dim),
-            nn.ReLU(),
-            nn.LayerNorm(in_dim),
-            nn.Dropout(p=dropout),
-            nn.Linear(out_dim, out_dim),
-        )
-        self.activate = nn.ReLU()
-
-    def forward(self, x):
-        residual = self.residual(x)
-        x = self.block(x)
-        x = self.activate(x + residual)
-        return x

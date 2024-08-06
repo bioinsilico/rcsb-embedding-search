@@ -5,11 +5,24 @@ from polars import Schema, String, Float32
 
 
 def load_class_pairs(tm_score_file):
-    return pl.DataFrame(
-        data=[(lambda row: row.strip().split(","))(row) for row in open(tm_score_file)],
-        orient="row",
-        schema=Schema({'domain_i': String, 'domain_j': String, 'score': Float32})
-    )
+    with open(tm_score_file) as file:
+        return pl.DataFrame(
+            data=[(lambda row: row.strip().split(","))(row) for row in file],
+            orient="row",
+            schema=Schema({'domain_i': String, 'domain_j': String, 'score': Float32})
+        )
+
+
+def load_class_pairs_with_self_comparison(tm_score_file):
+    with open(tm_score_file) as file:
+        return pl.DataFrame(
+            data=[(lambda row: row.strip().split(","))(row) for row in file] + [[r, r, 1.] for r in list(set(
+                [(lambda row: row.strip().split(",")[0])(row) for row in open(tm_score_file)] +
+                [(lambda row: row.strip().split(",")[1])(row) for row in open(tm_score_file)]
+            ))],
+            orient="row",
+            schema=Schema({'domain_i': String, 'domain_j': String, 'score': Float32})
+        )
 
 
 def load_tensors(tensor_path, tm_score_file):

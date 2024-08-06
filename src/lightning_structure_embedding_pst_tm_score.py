@@ -3,15 +3,18 @@ import signal
 
 import lightning as L
 from lightning.pytorch.plugins.environments import SLURMEnvironment
-from torch_geometric.data.lightning import LightningDataset
+from torch.utils.data import DataLoader
 
-from torch_geometric.loader import DataLoader
+from torch_geometric.loader import DataLoader as GraphDataLoader
 
-from dataset.geo_graph_dataset import GeoGraphDataset
+from dataset.pst.pst import load_pst_model
+from dataset.tm_score_from_coord_dataset import TmScoreFromCoordDataset
+from dataset.tm_score_polars_dataset import TmScorePolarsDataset
 from dataset.utils.custom_weighted_random_sampler import CustomWeightedRandomSampler
 from dataset.utils.tm_score_weight import fraction_score, tm_score_weights
-from lightning_module.lightning_batch_graph import LitStructureBatchGraph
-from networks.transformer_graph_nn import TransformerGraphEmbeddingCosine, BiTransformerGraphEmbeddingCosine
+from dataset.utils.tools import collate_fn
+from lightning_module.lightning_pst_graph import LitStructurePstGraph
+from networks.transformer_pst import TransformerPstEmbeddingCosine
 from src.params.structure_embedding_params import StructureEmbeddingParams
 
 if __name__ == '__main__':
@@ -23,11 +26,13 @@ if __name__ == '__main__':
     test_classes = params.test_class_file
     test_embedding = params.test_embedding_path
 
-    training_set = GeoGraphDataset(
+    training_set = TmScoreFromCoordDataset(
         train_classes,
         train_embedding,
+        ext="",
         score_method=fraction_score,
-        weighting_method=tm_score_weights(5)
+        weighting_method=tm_score_weights(5),
+        num_workers=params.workers
     )
     weights = training_set.weights()
     sampler = CustomWeightedRandomSampler(
@@ -35,7 +40,7 @@ if __name__ == '__main__':
         num_samples=params.epoch_size if params.epoch_size > 0 else len(weights),
         replacement=True
     )
-    train_dataloader = DataLoader(
+    train_dataloader = GraphDataLoader(
         training_set,
         sampler=sampler,
         batch_size=params.batch_size,
@@ -43,7 +48,7 @@ if __name__ == '__main__':
         persistent_workers=True if params.workers > 0 else False
     )
 
-    validation_set = GeoGraphDataset(
+    validation_set = TmScorePolarsDataset(
         test_classes,
         test_embedding
     )
@@ -51,20 +56,31 @@ if __name__ == '__main__':
         validation_set,
         batch_size=params.testing_batch_size,
         num_workers=params.workers,
-        persistent_workers=True if params.workers > 0 else False
+        persistent_workers=True if params.workers > 0 else False,
+        collate_fn=collate_fn
     )
-
-    net = BiTransformerGraphEmbeddingCosine()
-    model = LitStructureBatchGraph(
-        nn_model=net,
+    pst_model = load_pst_model({
+        'model_path': params.pst_model_path
+    })
+    nn_model = TransformerPstEmbeddingCosine(
+        pst_model=pst_model,
+        input_features=params.input_layer,
+        dim_feedforward=params.dim_feedforward,
+        hidden_layer=params.hidden_layer,
+        nhead=params.nhead,
+        num_layers=params.num_layers,
+        res_block_layers=params.res_block_layers
+    )
+    model = LitStructurePstGraph(
+        nn_model=nn_model,
         learning_rate=params.learning_rate,
         params=params,
     )
 
     checkpoint_callback = L.pytorch.callbacks.ModelCheckpoint(
-        monitor=LitStructureBatchGraph.PR_AUC_METRIC_NAME,
+        monitor=LitStructurePstGraph.PR_AUC_METRIC_NAME,
         mode='max',
-        filename='{epoch}-{' + LitStructureBatchGraph.PR_AUC_METRIC_NAME + ':.2f}'
+        filename='{epoch}-{' + LitStructurePstGraph.PR_AUC_METRIC_NAME + ':.2f}'
     )
 
     lr_monitor = L.pytorch.callbacks.LearningRateMonitor(
@@ -79,10 +95,6 @@ if __name__ == '__main__':
         callbacks=[checkpoint_callback, lr_monitor],
         plugins=[SLURMEnvironment(requeue_signal=signal.SIGUSR1)],
         default_root_dir=params.default_root_dir if os.path.isdir(params.default_root_dir) else None
-    )
-    datamodule = LightningDataset(
-        train_dataset=training_set,
-        val_dataset=validation_set
     )
     trainer.fit(
         model,

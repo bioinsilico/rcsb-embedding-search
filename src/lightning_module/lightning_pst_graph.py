@@ -3,7 +3,7 @@ from torch import nn
 from lightning_module.lightning_base import LitStructureBase
 
 
-class LitStructureGeoGraph(LitStructureBase):
+class LitStructurePstGraph(LitStructureBase):
 
     def __init__(
             self,
@@ -21,6 +21,8 @@ class LitStructureGeoGraph(LitStructureBase):
         return nn.functional.mse_loss(z_pred, z)
 
     def validation_step(self, batch, batch_idx):
-        g_i, g_j, z = batch
+        (x, x_mask), (y, y_mask), z = batch
         self.z.append(z)
-        self.z_pred.append(self.model(g_i,g_j))
+        self.z_pred.append(
+            self.model.validation_forward(x, x_mask, y, y_mask)
+        )

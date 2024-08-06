@@ -25,6 +25,7 @@ class StructureEmbeddingParams:
         self.parser.add_argument('--nhead', type=int)
         self.parser.add_argument('--amplify_input', type=int)
         self.parser.add_argument('--hidden_layer', type=int)
+        self.parser.add_argument('--res_block_layers', type=int)
 
         self.parser.add_argument('--test_every_n_steps', type=int)
         self.parser.add_argument('--lr_frequency', type=int)
@@ -36,6 +37,8 @@ class StructureEmbeddingParams:
         self.parser.add_argument('--checkpoint', type=str)
         self.parser.add_argument('--default_root_dir', type=str)
         self.parser.add_argument('--metadata', type=str)
+
+        self.parser.add_argument('--pst_model_path', type=str)
 
         self.parser.add_argument('--profiler_file', type=str)
 
@@ -53,6 +56,7 @@ class StructureEmbeddingParams:
         self.dim_feedforward = args.dim_feedforward if args.dim_feedforward else self.input_layer
         self.nhead = args.nhead if args.nhead else 8
         self.num_layers = args.num_layers if args.num_layers else 6
+        self.res_block_layers = args.res_block_layers if args.res_block_layers else 0
         self.hidden_layer = args.hidden_layer if args.hidden_layer else self.input_layer
 
         self.test_every_n_steps = args.test_every_n_steps if args.test_every_n_steps else 10000
@@ -65,6 +69,8 @@ class StructureEmbeddingParams:
         self.metadata = args.metadata if args.metadata else "None"
         self.checkpoint = args.checkpoint if args.checkpoint else "None"
         self.default_root_dir = args.default_root_dir if args.default_root_dir else "None"
+
+        self.pst_model_path = args.pst_model_path if args.pst_model_path else None
 
         self.profiler_file = args.profiler_file if args.profiler_file else None
 
