@@ -1,7 +1,7 @@
 import lightning as L
 from torch import nn, optim, cat
 from torcheval.metrics.functional import binary_auprc, binary_auroc
-from params.structure_embedding_params import StructureEmbeddingParams
+from schema.config import Config
 from src.lightning_module.utils import get_cosine_schedule_with_warmup
 
 
@@ -12,7 +12,7 @@ class LitStructureBase(L.LightningModule):
             self,
             nn_model: nn.Module,
             learning_rate: float = 1e-6,
-            params: StructureEmbeddingParams = None
+            params: Config = None
     ):
         super().__init__()
         self.model = nn_model

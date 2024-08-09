@@ -4,6 +4,7 @@ from collections import OrderedDict
 
 from torch_geometric.utils import unbatch
 
+from dataset.pst.pst import load_pst_model
 from dataset.utils.tools import collate_seq_embeddings
 from networks.layers import ResBlock
 
@@ -13,7 +14,7 @@ class TransformerPstEmbeddingCosine(nn.Module):
 
     def __init__(
         self,
-        pst_model,
+        pst_model_path,
         input_features=640,
         dim_feedforward=1280,
         hidden_layer=640,
@@ -22,7 +23,10 @@ class TransformerPstEmbeddingCosine(nn.Module):
         res_block_layers=0
     ):
         super().__init__()
-        self.pst_model = pst_model
+
+        self.pst_model = load_pst_model({
+            'model_path': pst_model_path
+        })
 
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=input_features,
