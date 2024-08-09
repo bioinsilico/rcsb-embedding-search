@@ -38,12 +38,12 @@ class TmScoreWeight:
         h = 1 / self.n_intervals
         for idx in range(self.n_intervals):
             f = sum([1 for s in scores if idx * h <= s < (idx + 1) * h])
-            print(f"Found {f} cases in range {idx*h} <= s < {(idx + 1) * h}")
+            print(f"Found {f} pairs in range {idx*h} <= s < {(idx + 1) * h}")
             self.weights.append(
                 1 / f if f > 0 else 0
             )
         f = sum([1 for s in scores if s == 1.])
-        print(f"Found {f} cases for s == 1")
+        print(f"Found {f} pairs for s == 1")
         self.weights.append(1 / f if f > 0 else 0)
 
     def get_weight(self, score):

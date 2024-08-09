@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 import os
 
@@ -29,7 +31,7 @@ class TmScoreFromCoordDataset(Dataset):
             ext="ent",
             score_method=None,
             weighting_method=None,
-            coords_augmenter: AbstractAugmenter = NullAugmenter(),
+            coords_augmenter: AbstractAugmenter | None = NullAugmenter(),
             num_workers=1
     ):
         super().__init__()
@@ -37,7 +39,7 @@ class TmScoreFromCoordDataset(Dataset):
         self.class_pairs = pl.DataFrame()
         self.score_method = binary_score(self.BINARY_THR) if not score_method else score_method
         self.weighting_method = binary_weights(self.BINARY_THR) if not weighting_method else weighting_method
-        self.coords_augmenter = coords_augmenter
+        self.coords_augmenter = NullAugmenter() if coords_augmenter is None else coords_augmenter
         self.nun_workers = num_workers if num_workers > 1 else 1
         self.__exec(tm_score_file, coords_path, f".{ext}" if len(ext) > 0 else "")
 

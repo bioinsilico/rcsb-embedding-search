@@ -1,5 +1,8 @@
 /rcsb-embedding-search.iml
-/src/lightning_logs/
+/src/lightning_logs
+/src/outputs
 /info
-/src/dataset/pst/.cache/pst/
+/src/dataset/pst/.cache/pst
 /.idea
+/config/*
+!/config/default.yaml

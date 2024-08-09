@@ -1,9 +1,11 @@
-import os.path
 import signal
 
+import hydra
 import lightning as L
+from hydra.core.hydra_config import HydraConfig
 from lightning import seed_everything
 from lightning.pytorch.plugins.environments import SLURMEnvironment
+from omegaconf import DictConfig
 from torch.utils.data import DataLoader
 
 from torch_geometric.loader import DataLoader as GraphDataLoader
@@ -11,7 +13,6 @@ from torch_geometric.loader import DataLoader as GraphDataLoader
 from dataset.pst.pst import load_pst_model
 from dataset.tm_score_from_coord_dataset import TmScoreFromCoordDataset
 from dataset.tm_score_polars_dataset import TmScorePolarsDataset
-from dataset.utils.coords_augmenter import SelfAugmenterRandomFraction
 from dataset.utils.custom_weighted_random_sampler import CustomWeightedRandomSampler
 from dataset.utils.tm_score_weight import fraction_score, tm_score_weights
 from dataset.utils.tools import collate_fn
@@ -19,10 +20,15 @@ from lightning_module.lightning_pst_graph import LitStructurePstGraph
 from networks.transformer_pst import TransformerPstEmbeddingCosine
 from src.params.structure_embedding_params import StructureEmbeddingParams
 
-if __name__ == '__main__':
-    seed_everything(42, workers=True)
 
-    params = StructureEmbeddingParams()
+@hydra.main(version_base=None, config_path="../config", config_name="default")
+def main(cfg: DictConfig):
+    params = StructureEmbeddingParams(
+        cfg=cfg,
+        cfg_file_name=HydraConfig.get().job.config_name
+    )
+
+    seed_everything(params.global_seed, workers=True)
 
     train_classes = params.train_class_file
     train_embedding = params.train_embedding_path
@@ -32,14 +38,11 @@ if __name__ == '__main__':
     training_set = TmScoreFromCoordDataset(
         train_classes,
         train_embedding,
-        ext="",
+        ext=params.train_embedding_ext,
         score_method=fraction_score,
         weighting_method=tm_score_weights(5),
         num_workers=params.workers,
-        coords_augmenter=SelfAugmenterRandomFraction(
-            fraction=0.1,
-            max_remove=10
-        )
+        coords_augmenter=params.data_augmenter
     )
     weights = training_set.weights()
     sampler = CustomWeightedRandomSampler(
@@ -101,11 +104,15 @@ if __name__ == '__main__':
         strategy=params.strategy,
         callbacks=[checkpoint_callback, lr_monitor],
         plugins=[SLURMEnvironment(requeue_signal=signal.SIGUSR1)],
-        default_root_dir=params.default_root_dir if os.path.isdir(params.default_root_dir) else None
+        default_root_dir=params.default_root_dir
     )
     trainer.fit(
         model,
         train_dataloader,
         validation_dataloader,
-        ckpt_path=params.checkpoint if os.path.isfile(params.checkpoint) else None
+        ckpt_path=params.checkpoint
     )
+
+
+if __name__ == '__main__':
+    main()

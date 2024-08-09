@@ -1,86 +1,72 @@
-import argparse
+import os
+
+from hydra.utils import instantiate
+from omegaconf import DictConfig
 
 
 class StructureEmbeddingParams:
 
-    def __init__(self):
-        self.parser = argparse.ArgumentParser()
+    def __init__(self, cfg: DictConfig, cfg_file_name: str):
+        self.cfg = cfg
+        self.config_file_name = cfg_file_name
 
-        self.parser.add_argument('--train_class_file', required=True)
-        self.parser.add_argument('--train_embedding_path', required=True)
-        self.parser.add_argument('--test_class_file', required=True)
-        self.parser.add_argument('--test_embedding_path', required=True)
+        self.train_class_file = self.cfg.training_sources.train_class_file
+        self.train_embedding_path = self.cfg.training_sources.train_embedding_path
+        self.train_embedding_ext = self.cfg.training_sources.train_embedding_ext
+        self.test_class_file = self.cfg.training_sources.test_class_file
+        self.test_embedding_path = self.cfg.training_sources.test_embedding_path
 
-        self.parser.add_argument('--learning_rate', type=float)
-        self.parser.add_argument('--weight_decay', type=float)
-        self.parser.add_argument('--warmup_epochs', type=int)
-        self.parser.add_argument('--batch_size', type=int)
-        self.parser.add_argument('--testing_batch_size', type=int)
-        self.parser.add_argument('--epochs', type=int)
-        self.parser.add_argument('--check_val_every_n_epoch', type=int)
-        self.parser.add_argument('--epoch_size', type=int)
-        self.parser.add_argument('--input_layer', type=int)
-        self.parser.add_argument('--dim_feedforward', type=int)
-        self.parser.add_argument('--num_layers', type=int)
-        self.parser.add_argument('--nhead', type=int)
-        self.parser.add_argument('--amplify_input', type=int)
-        self.parser.add_argument('--hidden_layer', type=int)
-        self.parser.add_argument('--res_block_layers', type=int)
+        if (
+                self.cfg.training_sources.checkpoint is not None
+                and not os.path.isfile(self.cfg.training_sources.checkpoint)
+        ):
+            raise Exception(
+                f"Config training_sources.checkpoint is defined but "
+                f"file {self.cfg.training_sources.checkpoint} does not exists"
+            )
+        self.checkpoint = self.cfg.training_sources.checkpoint
 
-        self.parser.add_argument('--test_every_n_steps', type=int)
-        self.parser.add_argument('--lr_frequency', type=int)
-        self.parser.add_argument('--lr_interval', type=str)
-        self.parser.add_argument('--devices', type=int)
-        self.parser.add_argument('--workers', type=int)
-        self.parser.add_argument('--strategy', type=str)
+        if (
+                self.cfg.training_sources.default_root_dir is not None
+                and not os.path.isdir(self.cfg.training_sources.default_root_dir)
+        ):
+            raise Exception(
+                f"Config training_sources.default_root_dir is defined but "
+                f"path {self.cfg.training_sources.checkpoint} does not exists"
+            )
+        self.default_root_dir = self.cfg.training_sources.default_root_dir
 
-        self.parser.add_argument('--checkpoint', type=str)
-        self.parser.add_argument('--default_root_dir', type=str)
-        self.parser.add_argument('--metadata', type=str)
+        self.devices = self.cfg.computing_resources.devices
+        self.workers = self.cfg.computing_resources.workers
+        self.strategy = self.cfg.computing_resources.strategy
 
-        self.parser.add_argument('--pst_model_path', type=str)
+        self.learning_rate = self.cfg.training_parameters.learning_rate
+        self.weight_decay = self.cfg.training_parameters.weight_decay
+        self.warmup_epochs = self.cfg.training_parameters.warmup_epochs
+        self.batch_size = self.cfg.training_parameters.batch_size
+        self.testing_batch_size = self.cfg.training_parameters.testing_batch_size
+        self.epochs = self.cfg.training_parameters.epochs
+        self.check_val_every_n_epoch = self.cfg.training_parameters.check_val_every_n_epoch
+        self.epoch_size = self.cfg.training_parameters.epoch_size
+        self.lr_frequency = self.cfg.training_parameters.lr_frequency
+        self.lr_interval = self.cfg.training_parameters.lr_interval
 
-        self.parser.add_argument('--profiler_file', type=str)
+        self.input_layer = self.cfg.network.input_layer
+        self.dim_feedforward = self.cfg.network.dim_feedforward
+        self.nhead = self.cfg.network.nhead
+        self.num_layers = self.cfg.network.num_layers
+        self.hidden_layer = self.cfg.network.hidden_layer
+        self.res_block_layers = self.cfg.network.res_block_layers
+        self.pst_model_path = self.cfg.network.pst_model_path
 
-        args = self.parser.parse_args()
+        self.global_seed = self.cfg.global_seed
+        self.profiler_file = self.cfg.profiler_file
+        self.metadata = self.cfg.metadata
 
-        self.learning_rate = args.learning_rate if args.learning_rate else 1e-6
-        self.weight_decay = args.weight_decay if args.weight_decay else 0.
-        self.warmup_epochs = args.warmup_epochs if args.warmup_epochs else 0
-        self.batch_size = args.batch_size if args.batch_size else 32
-        self.testing_batch_size = args.testing_batch_size if args.testing_batch_size else self.batch_size
-        self.epochs = args.epochs if args.epochs else 100
-        self.check_val_every_n_epoch = args.check_val_every_n_epoch if args.check_val_every_n_epoch else 1
-        self.epoch_size = args.epoch_size if args.epoch_size else 0
-        self.input_layer = args.input_layer if args.input_layer else 640
-        self.dim_feedforward = args.dim_feedforward if args.dim_feedforward else self.input_layer
-        self.nhead = args.nhead if args.nhead else 8
-        self.num_layers = args.num_layers if args.num_layers else 6
-        self.res_block_layers = args.res_block_layers if args.res_block_layers else 0
-        self.hidden_layer = args.hidden_layer if args.hidden_layer else self.input_layer
-
-        self.test_every_n_steps = args.test_every_n_steps if args.test_every_n_steps else 10000
-        self.lr_frequency = args.lr_frequency if args.lr_frequency else 1
-        self.lr_interval = args.lr_interval if args.lr_interval == "step" else "epoch"
-        self.devices = args.devices if args.devices else 1
-        self.workers = args.workers if args.workers else 0
-        self.strategy = args.strategy if args.strategy else "auto"
-
-        self.metadata = args.metadata if args.metadata else "None"
-        self.checkpoint = args.checkpoint if args.checkpoint else "None"
-        self.default_root_dir = args.default_root_dir if args.default_root_dir else "None"
-
-        self.pst_model_path = args.pst_model_path if args.pst_model_path else None
-
-        self.profiler_file = args.profiler_file if args.profiler_file else None
-
-        self.train_class_file = args.train_class_file
-        self.train_embedding_path = args.train_embedding_path
-        self.test_class_file = args.test_class_file
-        self.test_embedding_path = args.test_embedding_path
+        self.data_augmenter = instantiate(self.cfg.data_augmenter) if self.cfg.data_augmenter is not None else None
 
     def text_params(self, params=None):
         if params is None:
             params = {}
         params.update(self.__dict__)
-        return '\n'.join(["%s: %s  " % (k, v) for k, v in params.items() if k != "parser"])
+        return '\n'.join(["%s: %s  " % (k, v) for k, v in params.items() if k != "cfg"])

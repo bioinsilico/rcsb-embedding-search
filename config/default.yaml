@@ -1,0 +1,41 @@
+training_sources:
+  train_class_file: ???
+  train_embedding_path: ???
+  train_embedding_ext: ???
+  test_class_file: ???
+  test_embedding_path: ???
+  checkpoint: null
+  default_root_dir: null
+
+data_augmenter: null
+
+computing_resources:
+  devices: 1
+  workers: 1
+  strategy: auto
+
+training_parameters:
+  learning_rate: 1e-5
+  weight_decay: 0.
+  warmup_epochs: 1
+  batch_size: 8
+  testing_batch_size: 64
+  epochs: 1000
+  check_val_every_n_epoch: 50
+  epoch_size: 320000
+  lr_frequency: 1
+  lr_interval: epoch
+
+network:
+  input_layer: 640
+  nhead: 10
+  num_layers: 6
+  dim_feedforward: 1280
+  hidden_layer: 640
+  res_block_layers: 0
+  pst_model_path: null
+
+global_seed: 42
+profiler_file: null
+metadata: Default config
+
