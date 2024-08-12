@@ -28,7 +28,7 @@ class TmScoreFromCoordDataset(Dataset):
             self,
             tm_score_file,
             coords_path,
-            ext="ent",
+            ext="pdb",
             score_method=None,
             weighting_method=None,
             coords_augmenter: AbstractAugmenter | None = NullAugmenter(),

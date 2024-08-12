@@ -17,7 +17,13 @@ d_type = np.float32
 class TmScorePolarsDataset(Dataset):
     BINARY_THR = 0.7
 
-    def __init__(self, tm_score_file, embedding_path, score_method=None, weighting_method=None):
+    def __init__(
+            self,
+            tm_score_file,
+            embedding_path,
+            score_method=None,
+            weighting_method=None
+    ):
         self.embedding = pl.DataFrame()
         self.class_pairs = pl.DataFrame()
         self.score_method = binary_score(self.BINARY_THR) if not score_method else score_method

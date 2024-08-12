@@ -1,4 +1,5 @@
 import lightning as L
+from omegaconf import OmegaConf
 from torch import nn, optim, cat
 from torcheval.metrics.functional import binary_auprc, binary_auroc
 from schema.config import Config
@@ -12,23 +13,20 @@ class LitStructureBase(L.LightningModule):
             self,
             nn_model: nn.Module,
             learning_rate: float = 1e-6,
-            params: Config = None
+            cfg: Config = None
     ):
         super().__init__()
         self.model = nn_model
         self.learning_rate = learning_rate
-        self.params = params
+        self.cfg = cfg
         self.z = []
         self.z_pred = []
 
     def on_fit_start(self):
-        if self.params and hasattr(self.logger.experiment, 'add_text'):
-            summary = L.pytorch.utilities.model_summary.LayerSummary(self)
+        if self.cfg is not None and hasattr(self.logger.experiment, 'add_text'):
             self.logger.experiment.add_text(
-                "Param Description",
-                self.params.text_params({
-                    "Number-parameters": f"{summary.num_parameters // 1e6}M"
-                })
+                "Config",
+                OmegaConf.to_yaml(self.cfg)
             )
 
     def on_train_epoch_start(self):
@@ -59,19 +57,19 @@ class LitStructureBase(L.LightningModule):
         optimizer = optim.AdamW(
             params=self.parameters(),
             lr=self.learning_rate,
-            weight_decay=self.params.weight_decay if self.params.weight_decay else 0
+            weight_decay=self.cfg.training_parameters.weight_decay if self.cfg.training_parameters.weight_decay is not None else 0
         )
         lr_scheduler = get_cosine_schedule_with_warmup(
             optimizer,
-            warmup_epochs=self.params.warmup_epochs,
-            max_epochs=self.params.epochs
+            warmup_epochs=self.cfg.training_parameters.warmup_epochs,
+            max_epochs=self.cfg.training_parameters.epochs
         )
         return {
             'optimizer': optimizer,
             'lr_scheduler': {
                 'scheduler': lr_scheduler,
-                'interval': self.params.lr_interval,
-                'frequency': self.params.lr_frequency
+                'interval': self.cfg.training_parameters.lr_interval,
+                'frequency': self.cfg.training_parameters.lr_frequency
             }
         }
 
