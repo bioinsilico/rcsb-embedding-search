@@ -1,9 +1,8 @@
 from torch import nn
+from lightning_module.lightning_core import LitStructureCore
 
-from lightning_module.lightning_base import LitStructureBase
 
-
-class LitStructurePstGraph(LitStructureBase):
+class LitStructurePstGraph(LitStructureCore):
 
     def __init__(
             self,

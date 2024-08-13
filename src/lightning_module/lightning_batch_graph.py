@@ -1,9 +1,9 @@
 from torch import nn
 
-from lightning_module.lightning_base import LitStructureBase
+from lightning_module.lightning_core import LitStructureCore
 
 
-class LitStructureBatchGraph(LitStructureBase):
+class LitStructureBatchGraph(LitStructureCore):
 
     def __init__(
             self,

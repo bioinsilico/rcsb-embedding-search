@@ -6,7 +6,7 @@ from schema.config import Config
 from src.lightning_module.utils import get_cosine_schedule_with_warmup
 
 
-class LitStructureBase(L.LightningModule):
+class LitStructureCore(L.LightningModule):
     PR_AUC_METRIC_NAME = 'pr_auc'
 
     def __init__(
