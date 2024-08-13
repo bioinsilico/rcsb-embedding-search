@@ -19,18 +19,11 @@ training_parameters:
   weight_decay: 0.
   warmup_epochs: 1
   epochs: 1000
-  check_val_every_n_epoch: 50
+  check_val_every_n_epoch: 25
   epoch_size: 320000
   lr_frequency: 1
   lr_interval: epoch
 
-embedding_network:
-  input_layer: 640
-  nhead: 10
-  num_layers: 6
-  dim_feedforward: 1280
-  hidden_layer: 640
-  res_block_layers: 0
-  pst_model_path: null
+embedding_network: ???
 
 metadata: Default config
