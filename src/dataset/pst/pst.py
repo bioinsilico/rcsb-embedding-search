@@ -176,7 +176,6 @@ def load_pst_model(cfg):
         pretrained_path,
         map_location=torch.device(device),
     )
-    model.to(device)
     model.eval()
     for param in model.parameters():
         param.requires_grad = False
