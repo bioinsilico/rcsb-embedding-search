@@ -56,6 +56,7 @@ class ComputingResources:
     devices: int = MISSING
     workers: int = MISSING
     strategy: Strategy = MISSING
+    nodes: int = 1
 
 
 class LrInterval(str, Enum):

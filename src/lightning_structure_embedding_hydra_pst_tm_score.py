@@ -94,6 +94,7 @@ def main(cfg: Config):
     trainer = L.Trainer(
         max_epochs=cfg.training_parameters.epochs,
         check_val_every_n_epoch=cfg.training_parameters.check_val_every_n_epoch,
+        num_nodes=cfg.computing_resources.nodes,
         devices=cfg.computing_resources.devices,
         strategy=cfg.computing_resources.strategy,
         callbacks=[checkpoint_callback, lr_monitor],
