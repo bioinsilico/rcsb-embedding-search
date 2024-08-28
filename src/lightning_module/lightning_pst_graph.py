@@ -25,3 +25,7 @@ class LitStructurePstGraph(LitStructureCore):
         self.z_pred.append(
             self.model.validation_forward(x, x_mask, y, y_mask)
         )
+
+    def predict_step(self, batch, batch_idx):
+        (x, x_mask), z = batch
+        return self.model.embedding_pooling(x, x_mask), z

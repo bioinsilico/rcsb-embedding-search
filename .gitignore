@@ -5,4 +5,5 @@
 /src/dataset/pst/.cache/pst
 /.idea
 /config/*
-!/config/default.yaml
+!/config/training_default.yaml
+!/config/inference_default.yaml

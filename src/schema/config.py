@@ -7,7 +7,7 @@ from typing import Optional, Any
 
 
 @dataclass
-class Config:
+class TrainingConfig:
     computing_resources: ComputingResources = MISSING
     global_seed: int = MISSING
     checkpoint: Optional[str]
@@ -20,6 +20,13 @@ class Config:
 
 
 @dataclass
+class InferenceConfig:
+    checkpoint: str = MISSING
+    inference_set: EmbeddingDataset = MISSING
+    embedding_network: EmbeddingNetwork = MISSING
+
+
+@dataclass
 class EmbeddingNetwork:
     input_layer: int = MISSING
     nhead: int = MISSING
@@ -28,6 +35,13 @@ class EmbeddingNetwork:
     hidden_layer: int = MISSING
     res_block_layers: int = MISSING
     pst_model_path: Optional[Path]
+
+
+@dataclass
+class EmbeddingDataset:
+    embedding_source: Path = MISSING
+    embedding_path: Path = MISSING
+    batch_size: int = MISSING
 
 
 @dataclass

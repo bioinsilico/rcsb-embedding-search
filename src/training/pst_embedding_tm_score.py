@@ -17,14 +17,14 @@ from dataset.utils.tm_score_weight import fraction_score, tm_score_weights
 from dataset.utils.tools import collate_fn
 from lightning_module.lightning_pst_graph import LitStructurePstGraph
 from networks.transformer_pst import TransformerPstEmbeddingCosine
-from schema.config import Config
+from schema.config import TrainingConfig
 
 cs = ConfigStore.instance()
-cs.store(name="base_config", node=Config)
+cs.store(name="base_config", node=TrainingConfig)
 
 
-@hydra.main(version_base=None, config_path="../config", config_name="default")
-def main(cfg: Config):
+@hydra.main(version_base=None, config_path="../../config", config_name="training_default")
+def main(cfg: TrainingConfig):
     seed_everything(cfg.global_seed, workers=True)
 
     training_set = TmScoreFromCoordDataset(

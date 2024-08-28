@@ -67,20 +67,23 @@ class TransformerPstEmbeddingCosine(nn.Module):
             graph.batch[graph.idx_mask]
         ))
 
+    def embedding_pooling(self, x, x_mask):
+        return self.embedding(self.transformer(x, src_key_padding_mask=x_mask).sum(dim=1))
+
     def validation_forward(self, x, x_mask, y, y_mask):
         return nn.functional.cosine_similarity(
-            self.embedding(self.transformer(x, src_key_padding_mask=x_mask).sum(dim=1)),
-            self.embedding(self.transformer(y, src_key_padding_mask=y_mask).sum(dim=1))
+            self.embedding_pooling(x, x_mask),
+            self.embedding_pooling(y, y_mask)
         )
 
     def forward(self, g_i, g_j):
         x_batch, x_mask = self.graph_transformer_forward(g_i)
         y_batch, y_mask = self.graph_transformer_forward(g_j)
         if x_batch.shape[0] != y_batch.shape[0]:
-            print("ERROR!!!")
+            raise Exception("Batch shape mismatch")
         return nn.functional.cosine_similarity(
-            self.embedding(self.transformer(x_batch, src_key_padding_mask=x_mask).sum(dim=1)),
-            self.embedding(self.transformer(y_batch, src_key_padding_mask=y_mask).sum(dim=1))
+            self.embedding_pooling(x_batch, x_mask),
+            self.embedding_pooling(y_batch, y_mask)
         )
 
     def get_weights(self):

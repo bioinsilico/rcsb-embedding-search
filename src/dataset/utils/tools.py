@@ -97,3 +97,7 @@ def triplet_collate_fn(tuple_list):
         collate_seq_embeddings([y for x, y, z in tuple_list]),
         collate_seq_embeddings([z for x, y, z in tuple_list])
     )
+
+
+def embedding_collate_fn(tuple_list):
+    return collate_seq_embeddings([x for x, z in tuple_list]), tuple([z for x, z in tuple_list])

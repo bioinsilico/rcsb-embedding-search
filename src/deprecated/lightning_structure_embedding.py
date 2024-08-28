@@ -1,12 +1,11 @@
 import lightning as L
 
-from torch.utils.data import DataLoader
+from torch.utils.data import WeightedRandomSampler, DataLoader
 
-from src.dataset.structure_embedding_dataset import StructureEmbeddingDataset
-from src.dataset.triplet_embedding_dataset import TripletEmbeddingDataset
-from dataset.utils.tools import collate_fn, triplet_collate_fn
-from src.lightning_module.lightning_triplet import LitTripletEmbedding
-from src.networks.transformer_nn import TransformerEmbedding
+from deprecated.dataset.structure_embedding_dataset import StructureEmbeddingDataset
+from dataset.utils.tools import collate_fn
+from deprecated.lightning_module.lightning_embedding import LitStructureEmbedding
+from src.networks.transformer_nn import TransformerEmbeddingCosine
 from src.params.structure_embedding_params import StructureEmbeddingParams
 
 if __name__ == '__main__':
@@ -18,17 +17,19 @@ if __name__ == '__main__':
     test_classes = params.test_class_file
     test_embedding = params.test_embedding_path
 
-    training_set = TripletEmbeddingDataset(
+    training_set = StructureEmbeddingDataset(
         train_classes,
         train_embedding
     )
+    weights = training_set.weights()
+    sampler = WeightedRandomSampler(weights=weights, num_samples=len(weights), replacement=True)
     train_dataloader = DataLoader(
         training_set,
-        shuffle=True,
+        sampler=sampler,
         batch_size=params.batch_size,
-        num_workers=2,
+        num_workers=params.workers,
         persistent_workers=True,
-        collate_fn=triplet_collate_fn
+        collate_fn=collate_fn
     )
 
     testing_set = StructureEmbeddingDataset(
@@ -38,13 +39,13 @@ if __name__ == '__main__':
     test_dataloader = DataLoader(
         testing_set,
         batch_size=params.batch_size,
-        num_workers=2,
+        num_workers=params.workers,
         persistent_workers=True,
         collate_fn=collate_fn
     )
 
-    model = LitTripletEmbedding(
-        net=TransformerEmbedding(
+    model = LitStructureEmbedding(
+        nn_model=TransformerEmbeddingCosine(
             input_features=params.input_layer,
             dim_feedforward=params.dim_feedforward,
             hidden_layer=params.hidden_layer,
@@ -56,9 +57,9 @@ if __name__ == '__main__':
     )
 
     checkpoint_callback = L.pytorch.callbacks.ModelCheckpoint(
-        monitor=LitTripletEmbedding.PR_AUC_METRIC_NAME,
+        monitor=LitStructureEmbedding.PR_AUC_METRIC_NAME,
         mode='max',
-        filename='{epoch}-{'+LitTripletEmbedding.PR_AUC_METRIC_NAME+':.2f}'
+        filename='{epoch}-{'+LitStructureEmbedding.PR_AUC_METRIC_NAME+':.2f}'
     )
 
     lr_monitor = L.pytorch.callbacks.LearningRateMonitor(

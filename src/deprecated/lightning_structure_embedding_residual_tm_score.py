@@ -14,8 +14,8 @@ from dataset.tm_score_polars_dataset import TmScorePolarsDataset
 from dataset.utils.custom_weighted_random_sampler import CustomWeightedRandomSampler
 from dataset.utils.tm_score_weight import fraction_score, tm_score_weights
 from dataset.utils.tools import collate_fn
-from src.lightning_module.lightning_embedding import LitStructureEmbedding
-from src.networks.transformer_nn import TransformerEmbeddingCosine, TransformerResBlockEmbeddingCosine
+from deprecated.lightning_module.lightning_embedding import LitStructureEmbedding
+from src.networks.transformer_nn import TransformerResBlockEmbeddingCosine
 from src.params.structure_embedding_params import StructureEmbeddingParams
 
 if __name__ == '__main__':
@@ -60,7 +60,7 @@ if __name__ == '__main__':
         collate_fn=collate_fn
     )
 
-    nn_model = TransformerEmbeddingCosine(
+    nn_model = TransformerResBlockEmbeddingCosine(
         input_features=params.input_layer,
         dim_feedforward=params.dim_feedforward,
         hidden_layer=params.hidden_layer,

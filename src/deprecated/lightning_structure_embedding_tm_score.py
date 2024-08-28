@@ -1,48 +1,37 @@
+import os.path
 import signal
 
-import hydra
 import lightning as L
-from hydra.core.hydra_config import HydraConfig
-from lightning import seed_everything
 from lightning.pytorch.plugins.environments import SLURMEnvironment
-from omegaconf import DictConfig
+from lightning.pytorch.profilers import PyTorchProfiler
+
 from torch.utils.data import DataLoader
 
-from torch_geometric.loader import DataLoader as GraphDataLoader
-
-from dataset.pst.pst import load_pst_model
-from dataset.tm_score_from_coord_dataset import TmScoreFromCoordDataset
 from dataset.tm_score_polars_dataset import TmScorePolarsDataset
+# from src.dataset.tm_score_from_file_dataset import TmScoreFileDataset
+# from src.dataset.tm_score_dataset import TmScoreDataset
+
 from dataset.utils.custom_weighted_random_sampler import CustomWeightedRandomSampler
 from dataset.utils.tm_score_weight import fraction_score, tm_score_weights
 from dataset.utils.tools import collate_fn
-from lightning_module.lightning_pst_graph import LitStructurePstGraph
-from networks.transformer_pst import TransformerPstEmbeddingCosine
+from deprecated.lightning_module.lightning_embedding import LitStructureEmbedding
+from src.networks.transformer_nn import TransformerEmbeddingCosine
 from src.params.structure_embedding_params import StructureEmbeddingParams
 
+if __name__ == '__main__':
 
-@hydra.main(version_base=None, config_path="../config", config_name="default")
-def main(cfg: DictConfig):
-    params = StructureEmbeddingParams(
-        cfg=cfg,
-        cfg_file_name=HydraConfig.get().job.config_name
-    )
-
-    seed_everything(params.global_seed, workers=True)
+    params = StructureEmbeddingParams()
 
     train_classes = params.train_class_file
     train_embedding = params.train_embedding_path
     test_classes = params.test_class_file
     test_embedding = params.test_embedding_path
 
-    training_set = TmScoreFromCoordDataset(
+    training_set = TmScorePolarsDataset(
         train_classes,
         train_embedding,
-        ext=params.train_embedding_ext,
         score_method=fraction_score,
-        weighting_method=tm_score_weights(5),
-        num_workers=params.workers,
-        coords_augmenter=params.data_augmenter
+        weighting_method=tm_score_weights(5)
     )
     weights = training_set.weights()
     sampler = CustomWeightedRandomSampler(
@@ -50,12 +39,13 @@ def main(cfg: DictConfig):
         num_samples=params.epoch_size if params.epoch_size > 0 else len(weights),
         replacement=True
     )
-    train_dataloader = GraphDataLoader(
+    train_dataloader = DataLoader(
         training_set,
         sampler=sampler,
         batch_size=params.batch_size,
         num_workers=params.workers,
-        persistent_workers=True if params.workers > 0 else False
+        persistent_workers=True if params.workers > 0 else False,
+        collate_fn=collate_fn
     )
 
     validation_set = TmScorePolarsDataset(
@@ -69,33 +59,36 @@ def main(cfg: DictConfig):
         persistent_workers=True if params.workers > 0 else False,
         collate_fn=collate_fn
     )
-    pst_model = load_pst_model({
-        'model_path': params.pst_model_path
-    })
-    nn_model = TransformerPstEmbeddingCosine(
-        pst_model=pst_model,
+
+    nn_model = TransformerEmbeddingCosine(
         input_features=params.input_layer,
         dim_feedforward=params.dim_feedforward,
         hidden_layer=params.hidden_layer,
         nhead=params.nhead,
-        num_layers=params.num_layers,
-        res_block_layers=params.res_block_layers
+        num_layers=params.num_layers
     )
-    model = LitStructurePstGraph(
+    model = LitStructureEmbedding(
         nn_model=nn_model,
         learning_rate=params.learning_rate,
         params=params,
     )
 
     checkpoint_callback = L.pytorch.callbacks.ModelCheckpoint(
-        monitor=LitStructurePstGraph.PR_AUC_METRIC_NAME,
+        monitor=LitStructureEmbedding.PR_AUC_METRIC_NAME,
         mode='max',
-        filename='{epoch}-{' + LitStructurePstGraph.PR_AUC_METRIC_NAME + ':.2f}'
+        filename='{epoch}-{'+LitStructureEmbedding.PR_AUC_METRIC_NAME+':.2f}'
     )
 
     lr_monitor = L.pytorch.callbacks.LearningRateMonitor(
         logging_interval='step'
     )
+
+    if params.profiler_file:
+        profiler = PyTorchProfiler(
+            filename=params.profiler_file
+        )
+    else:
+        profiler = None
 
     trainer = L.Trainer(
         max_epochs=params.epochs,
@@ -104,15 +97,13 @@ def main(cfg: DictConfig):
         strategy=params.strategy,
         callbacks=[checkpoint_callback, lr_monitor],
         plugins=[SLURMEnvironment(requeue_signal=signal.SIGUSR1)],
-        default_root_dir=params.default_root_dir
+        default_root_dir=params.default_root_dir if os.path.isdir(params.default_root_dir) else None,
+        profiler=profiler
     )
+
     trainer.fit(
         model,
         train_dataloader,
         validation_dataloader,
-        ckpt_path=params.checkpoint
+        ckpt_path=params.checkpoint if os.path.isfile(params.checkpoint) else None
     )
-
-
-if __name__ == '__main__':
-    main()

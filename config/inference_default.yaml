@@ -1,0 +1,8 @@
+defaults:
+  - base_config
+  - _self_
+
+checkpoint: null
+inference_set: ???
+embedding_network: ???
+
