@@ -70,3 +70,16 @@ def _remove_random_residues(n):
         return lists
 
     return __remove_n_random_elements_from_multiple_lists
+
+
+def _with_probability(probability):
+    """
+    Returns True with the given probability.
+
+    :param probability: A float between 0 and 1 representing the probability of returning True.
+    :return: True with the given probability, otherwise False.
+    """
+    if not 0 <= probability <= 1:
+        raise ValueError("Probability must be between 0 and 1.")
+
+    return random.random() < probability
