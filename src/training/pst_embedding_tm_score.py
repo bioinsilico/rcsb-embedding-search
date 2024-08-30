@@ -16,17 +16,15 @@ from dataset.utils.custom_weighted_random_sampler import CustomWeightedRandomSam
 from dataset.utils.tm_score_weight import fraction_score, tm_score_weights
 from dataset.utils.tools import collate_fn
 from lightning_module.training.lightning_pst_graph import LitStructurePstGraph
-from networks.transformer_pst import TransformerPstEmbeddingCosine
 from config_schema.config import TrainingConfig
 
 cs = ConfigStore.instance()
-cs.store(name="base_config", node=TrainingConfig)
+cs.store(name="training_default", node=TrainingConfig)
 
 
-@hydra.main(version_base=None, config_path="../../config", config_name="training_default")
+@hydra.main(version_base=None, config_path="../../config", config_name="training_config")
 def main(cfg: TrainingConfig):
     seed_everything(cfg.global_seed, workers=True)
-
     training_set = TmScoreFromCoordDataset(
         tm_score_file=cfg.training_set.tm_score_file,
         coords_path=cfg.training_set.data_path,
@@ -65,14 +63,8 @@ def main(cfg: TrainingConfig):
         collate_fn=collate_fn
     )
 
-    nn_model = TransformerPstEmbeddingCosine(
-        pst_model_path=cfg.embedding_network.pst_model_path,
-        input_features=cfg.embedding_network.input_layer,
-        nhead=cfg.embedding_network.nhead,
-        num_layers=cfg.embedding_network.num_layers,
-        dim_feedforward=cfg.embedding_network.dim_feedforward,
-        hidden_layer=cfg.embedding_network.hidden_layer,
-        res_block_layers=cfg.embedding_network.res_block_layers
+    nn_model = instantiate(
+        cfg.embedding_network
     )
 
     model = LitStructurePstGraph(

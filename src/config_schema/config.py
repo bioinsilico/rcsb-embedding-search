@@ -15,7 +15,8 @@ class TrainingConfig:
     training_set: TMScoreDataset = MISSING
     validation_set: TMScoreDataset = MISSING
     training_parameters: TrainingParameters = MISSING
-    embedding_network: EmbeddingNetwork = MISSING
+    network_parameters: NetworkParams = MISSING
+    embedding_network: Any = MISSING
     metadata: Optional[str]
 
 
@@ -23,20 +24,19 @@ class TrainingConfig:
 class InferenceConfig:
     computing_resources: ComputingResources = MISSING
     checkpoint: str = MISSING
-    embedding_network: EmbeddingNetwork = MISSING
+    network_parameters: NetworkParams = MISSING
+    embedding_network: Any = MISSING
     inference_set: EmbeddingDataset = MISSING
     inference_writer: Any = MISSING
 
 
 @dataclass
-class EmbeddingNetwork:
-    input_layer: int = MISSING
+class NetworkParams:
+    input_features: int = MISSING
     nhead: int = MISSING
     num_layers: int = MISSING
     dim_feedforward: int = MISSING
     hidden_layer: int = MISSING
-    res_block_layers: int = MISSING
-    pst_model_path: Optional[Path]
 
 
 @dataclass

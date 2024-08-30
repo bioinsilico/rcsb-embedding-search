@@ -1,0 +1,9 @@
+defaults:
+  - inference_default
+  - core_config
+  - _self_
+
+checkpoint: ???
+inference_set: ???
+inference_writer: ???
+

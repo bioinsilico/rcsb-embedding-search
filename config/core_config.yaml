@@ -1,0 +1,7 @@
+
+computing_resources:
+  devices: 1
+  workers: 1
+  strategy: auto
+
+embedding_network: ???

@@ -11,10 +11,12 @@ class CoreBatchWriter(BasePredictionWriter, ABC):
     def __init__(
             self,
             output_path,
+            postfix,
             write_interval="batch"
     ):
         super().__init__(write_interval)
         self.out_path = output_path
+        self.postfix = postfix
 
     def write_on_batch_end(
             self,
@@ -34,7 +36,7 @@ class CoreBatchWriter(BasePredictionWriter, ABC):
         ))
 
     def file_name(self, dom_id):
-        return f'{self.out_path}/{dom_id}.pt'
+        return f'{self.out_path}/{dom_id}.{self.postfix}'
 
     @abstractmethod
     def _write_embedding(self, embedding, dom_id):
@@ -45,9 +47,10 @@ class CsvBatchWriter(CoreBatchWriter, ABC):
     def __init__(
             self,
             output_path,
+            postfix,
             write_interval="batch"
     ):
-        super().__init__(output_path, write_interval)
+        super().__init__(output_path, postfix, write_interval)
 
     def _write_embedding(self, embedding, dom_id):
         pl.DataFrame(embedding.to('cpu').numpy()).write_csv(
@@ -60,14 +63,15 @@ class TensorBatchWriter(CoreBatchWriter, ABC):
     def __init__(
             self,
             output_path,
+            postfix,
             write_interval="batch",
             device="cpu"
     ):
-        super().__init__(output_path, write_interval)
+        super().__init__(output_path, postfix, write_interval)
         self.device = device
 
     def _write_embedding(self, embedding, dom_id):
         torch.save(
             embedding.to(self.device),
-            f'{self.out_path}/{dom_id}.pt'
+            self.file_name(dom_id)
         )

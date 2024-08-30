@@ -8,14 +8,13 @@ from torch.utils.data import DataLoader
 from dataset.residue_embeddings_dataset import ResidueEmbeddingsDataset
 from dataset.utils.tools import collate_seq_embeddings
 from lightning_module.inference.lightning_pst_embedding_pooling import LitStructurePstEmbeddingPooling
-from networks.transformer_pst import TransformerPstEmbeddingCosine
 from config_schema.config import InferenceConfig
 
 cs = ConfigStore.instance()
-cs.store(name="base_config", node=InferenceConfig)
+cs.store(name="inference_default", node=InferenceConfig)
 
 
-@hydra.main(version_base=None, config_path="../../config", config_name="inference_default")
+@hydra.main(version_base=None, config_path="../../config", config_name="inference_config")
 def main(cfg: InferenceConfig):
 
     inference_set = ResidueEmbeddingsDataset(
@@ -33,14 +32,8 @@ def main(cfg: InferenceConfig):
         )
     )
 
-    nn_model = TransformerPstEmbeddingCosine(
-        pst_model_path=cfg.embedding_network.pst_model_path,
-        input_features=cfg.embedding_network.input_layer,
-        nhead=cfg.embedding_network.nhead,
-        num_layers=cfg.embedding_network.num_layers,
-        dim_feedforward=cfg.embedding_network.dim_feedforward,
-        hidden_layer=cfg.embedding_network.hidden_layer,
-        res_block_layers=cfg.embedding_network.res_block_layers
+    nn_model = instantiate(
+        cfg.embedding_network
     )
 
     model = LitStructurePstEmbeddingPooling.load_from_checkpoint(

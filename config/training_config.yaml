@@ -1,11 +1,7 @@
 defaults:
-  - base_config
+  - training_default
+  - core_config
   - _self_
-
-computing_resources:
-  devices: 1
-  workers: 1
-  strategy: auto
 
 global_seed: 42
 checkpoint: null
@@ -23,7 +19,5 @@ training_parameters:
   epoch_size: 320000
   lr_frequency: 1
   lr_interval: epoch
-
-embedding_network: ???
 
 metadata: Default config
