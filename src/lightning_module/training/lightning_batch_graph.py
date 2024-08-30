@@ -1,5 +1,4 @@
 from torch import nn
-
 from lightning_module.lightning_core import LitStructureCore
 
 
@@ -23,4 +22,4 @@ class LitStructureBatchGraph(LitStructureCore):
     def validation_step(self, batch, batch_idx):
         g_i, g_j, z = batch
         self.z.append(z)
-        self.z_pred.append(self.model(g_i,g_j))
+        self.z_pred.append(self.model(g_i, g_j))

@@ -21,9 +21,11 @@ class TrainingConfig:
 
 @dataclass
 class InferenceConfig:
+    computing_resources: ComputingResources = MISSING
     checkpoint: str = MISSING
-    inference_set: EmbeddingDataset = MISSING
     embedding_network: EmbeddingNetwork = MISSING
+    inference_set: EmbeddingDataset = MISSING
+    inference_writer: Any = MISSING
 
 
 @dataclass

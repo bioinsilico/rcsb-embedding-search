@@ -15,7 +15,7 @@ from dataset.tm_score_polars_dataset import TmScorePolarsDataset
 from dataset.utils.custom_weighted_random_sampler import CustomWeightedRandomSampler
 from dataset.utils.tm_score_weight import fraction_score, tm_score_weights
 from dataset.utils.tools import collate_fn
-from lightning_module.lightning_pst_graph import LitStructurePstGraph
+from lightning_module.training.lightning_pst_graph import LitStructurePstGraph
 from networks.transformer_pst import TransformerPstEmbeddingCosine
 from schema.config import TrainingConfig
 

@@ -99,5 +99,23 @@ def triplet_collate_fn(tuple_list):
     )
 
 
-def embedding_collate_fn(tuple_list):
-    return collate_seq_embeddings([x for x, z in tuple_list]), tuple([z for x, z in tuple_list])
+def pair_at_index(n):
+    def __pair_at_index(index):
+        total = 0
+        for x in range(n):
+            count = n - x - 1
+            if index < total + count:
+                y = x + 1 + (index - total)
+                return (x, y)
+            total += count
+
+        raise IndexError("Index out of range for the given n")
+    return __pair_at_index
+
+
+if __name__ == "__main__":
+    n = 15229
+    index = 15228
+    f = pair_at_index(n)
+    result = f(index)
+    print(result)

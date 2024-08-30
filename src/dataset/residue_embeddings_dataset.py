@@ -5,7 +5,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 import polars as pl
 
-from dataset.utils.tools import embedding_collate_fn
+from dataset.utils.tools import collate_seq_embeddings
 
 
 class ResidueEmbeddingsDataset(Dataset):
@@ -55,7 +55,10 @@ if __name__ == '__main__':
     dataloader = DataLoader(
         dataset,
         batch_size=16,
-        collate_fn=embedding_collate_fn
+        collate_fn=lambda emb: (
+            collate_seq_embeddings([x for x, z in emb]),
+            tuple([z for x, z in emb])
+        )
     )
 
     for (x, x_mask), z in dataloader:

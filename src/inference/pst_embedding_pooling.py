@@ -1,15 +1,15 @@
 import hydra
 from hydra.core.config_store import ConfigStore
 import lightning as L
+from hydra.utils import instantiate
 
 from torch.utils.data import DataLoader
 
 from dataset.residue_embeddings_dataset import ResidueEmbeddingsDataset
-from dataset.utils.tools import embedding_collate_fn
-from lightning_module.lightning_pst_graph import LitStructurePstGraph
+from dataset.utils.tools import collate_seq_embeddings
+from lightning_module.inference.lightning_pst_embedding_pooling import LitStructurePstEmbeddingPooling
 from networks.transformer_pst import TransformerPstEmbeddingCosine
 from schema.config import InferenceConfig
-
 
 cs = ConfigStore.instance()
 cs.store(name="base_config", node=InferenceConfig)
@@ -25,8 +25,12 @@ def main(cfg: InferenceConfig):
 
     inference_dataloader = DataLoader(
         dataset=inference_set,
-        batch_size=16,
-        collate_fn=embedding_collate_fn
+        batch_size=cfg.inference_set.batch_size,
+        num_workers=cfg.computing_resources.workers,
+        collate_fn=lambda emb: (
+            collate_seq_embeddings([x for x, z in emb]),
+            tuple([z for x, z in emb])
+        )
     )
 
     nn_model = TransformerPstEmbeddingCosine(
@@ -39,17 +43,19 @@ def main(cfg: InferenceConfig):
         res_block_layers=cfg.embedding_network.res_block_layers
     )
 
-    model = LitStructurePstGraph(
+    model = LitStructurePstEmbeddingPooling.load_from_checkpoint(
+        cfg.checkpoint,
         nn_model=nn_model,
         params=cfg
-    ).load_from_checkpoint(cfg.checkpoint)
-    trainer = L.Trainer()
-    predictions = trainer.predict(
+    )
+    inference_writer = instantiate(
+        cfg.inference_writer
+    )
+    trainer = L.Trainer(callbacks=[inference_writer])
+    trainer.predict(
         model,
         inference_dataloader
     )
-    for x, z in predictions:
-        print(x.shape, len(z))
 
 
 if __name__ == '__main__':

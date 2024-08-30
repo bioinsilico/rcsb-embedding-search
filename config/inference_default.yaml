@@ -2,7 +2,13 @@ defaults:
   - base_config
   - _self_
 
-checkpoint: null
+computing_resources:
+  devices: 1
+  workers: 1
+  strategy: auto
+
+checkpoint: ???
 inference_set: ???
+inference_writer: ???
 embedding_network: ???
 
