@@ -9,7 +9,7 @@ from dataset.residue_embeddings_dataset import ResidueEmbeddingsDataset
 from dataset.utils.tools import collate_seq_embeddings
 from lightning_module.inference.lightning_pst_embedding_pooling import LitStructurePstEmbeddingPooling
 from networks.transformer_pst import TransformerPstEmbeddingCosine
-from schema.config import InferenceConfig
+from config_schema.config import InferenceConfig
 
 cs = ConfigStore.instance()
 cs.store(name="base_config", node=InferenceConfig)

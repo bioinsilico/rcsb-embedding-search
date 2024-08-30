@@ -17,7 +17,7 @@ from dataset.utils.tm_score_weight import fraction_score, tm_score_weights
 from dataset.utils.tools import collate_fn
 from lightning_module.training.lightning_pst_graph import LitStructurePstGraph
 from networks.transformer_pst import TransformerPstEmbeddingCosine
-from schema.config import TrainingConfig
+from config_schema.config import TrainingConfig
 
 cs = ConfigStore.instance()
 cs.store(name="base_config", node=TrainingConfig)

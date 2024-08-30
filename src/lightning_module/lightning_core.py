@@ -2,7 +2,7 @@ import lightning as L
 from omegaconf import OmegaConf
 from torch import nn, optim, cat
 from torcheval.metrics.functional import binary_auprc, binary_auroc
-from schema.config import TrainingConfig
+from config_schema.config import TrainingConfig
 from src.lightning_module.utils import get_cosine_schedule_with_warmup
 
 
