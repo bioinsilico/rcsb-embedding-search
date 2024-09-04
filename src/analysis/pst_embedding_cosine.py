@@ -9,10 +9,10 @@ from lightning_module.analysis.lightning_pst_embedding_cosine import LitStructur
 from config_schema.config import InferenceConfig
 
 cs = ConfigStore.instance()
-cs.store(name="base_config", node=InferenceConfig)
+cs.store(name="inference_default", node=InferenceConfig)
 
 
-@hydra.main(version_base=None, config_path="../../config", config_name="inference_default")
+@hydra.main(version_base=None, config_path="../../config", config_name="inference_config")
 def main(cfg: InferenceConfig):
 
     inference_set = ResidueEmbeddingPairsDataset(

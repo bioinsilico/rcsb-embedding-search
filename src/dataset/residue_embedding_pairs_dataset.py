@@ -5,8 +5,6 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 import polars as pl
 
-from dataset.utils.tools import pair_at_index
-
 
 class ResidueEmbeddingPairsDataset(Dataset):
     def __init__(
@@ -14,13 +12,13 @@ class ResidueEmbeddingPairsDataset(Dataset):
             embedding_list,
             embedding_path
     ):
-        self.n_pairs = None
-        self.__pair_at_index = None
-        self.embedding = pl.DataFrame()
+        self.embedding = None
+        self.pairs = None
         self.__exec(embedding_list, embedding_path)
 
     def __exec(self, embedding_list, embedding_path):
         self.load_embedding(embedding_list, embedding_path)
+        self.load_pairs()
 
     def load_embedding(self, embedding_list, embedding_path):
         self.embedding = pl.DataFrame(
@@ -35,16 +33,23 @@ class ResidueEmbeddingPairsDataset(Dataset):
             orient="row",
             schema=['dom_id', 'class_id', 'embedding'],
         )
+        print(f"Total embeddings: {len(self.embedding)}")
+
+    def load_pairs(self):
         n = len(self.embedding)
-        self.n_pairs = n * (n-1) // 2
-        self.__pair_at_index = pair_at_index(n)
-        print(f"Total embedding: {n}")
+        self.pairs = pl.DataFrame(
+            data=[(i, j) for i in range(0, n) for j in range(i+1, n)],
+            orient="row",
+            schema=['i', 'j']
+        )
+        print(f"Total pairs: {len(self.pairs)}")
 
     def __len__(self):
-        return self.n_pairs
+        return len(self.pairs)
 
     def __getitem__(self, idx):
-        idx_i, idx_j = self.__pair_at_index(idx)
+        idx_i = self.pairs.row(idx, named=True)['i']
+        idx_j = self.pairs.row(idx, named=True)['j']
         emb_i = self.embedding.row(idx_i, named=True)
         emb_j = self.embedding.row(idx_j, named=True)
         return (
@@ -66,6 +71,13 @@ def collate(emb):
     )
 
 
+def display_progress(current, total):
+    percent = (current / total) * 100
+    print(f"\rProgress: {percent:.2f}% ({current}/{total} files)", end='')
+    if current == total:
+        print()
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--embedding_list', type=str, required=True)
@@ -79,9 +91,12 @@ if __name__ == '__main__':
 
     dataloader = DataLoader(
         dataset,
-        batch_size=16,
+        batch_size=256,
         collate_fn=collate
     )
 
-    for (x, x_id), (y, y_id) in dataloader:
-        print(x, x_id, y_id)
+    n = len(dataset)
+    for idx, ((x, x_id), (y, y_id)) in enumerate(dataloader):
+        if idx % 10000 == 0:
+            print(display_progress(idx, n))
+

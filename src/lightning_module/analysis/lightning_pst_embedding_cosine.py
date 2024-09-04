@@ -1,6 +1,6 @@
-
 import lightning as L
 from torch import sum
+
 
 class LitStructurePstEmbeddingCosine(L.LightningModule):
 
