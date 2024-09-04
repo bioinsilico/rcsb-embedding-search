@@ -70,6 +70,10 @@ class TransformerPstEmbeddingCosine(nn.Module):
     def embedding_pooling(self, x, x_mask):
         return self.embedding(self.transformer(x, src_key_padding_mask=x_mask).sum(dim=1))
 
+    def graph_pooling(self, g):
+        x_batch, x_mask = self.graph_transformer_forward(g)
+        return self.embedding_pooling(x_batch, x_mask)
+
     def validation_forward(self, x, x_mask, y, y_mask):
         return nn.functional.cosine_similarity(
             self.embedding_pooling(x, x_mask),

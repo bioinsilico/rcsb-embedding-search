@@ -1,16 +1,29 @@
-from lightning_module.lightning_core import LitStructureCore
+import lightning as L
 
 
-class LitStructurePstEmbeddingPooling(LitStructureCore):
+class LitStructurePstEmbeddingPooling(L.LightningModule):
 
     def __init__(
             self,
-            nn_model,
-            learning_rate=1e-6,
-            params=None
+            nn_model
     ):
-        super().__init__(nn_model, learning_rate, params)
+        super().__init__()
+        self.model = nn_model
 
     def predict_step(self, batch, batch_idx):
         (x, x_mask), dom_id = batch
         return self.model.embedding_pooling(x, x_mask), dom_id
+
+
+class LitStructurePstEmbeddingPoolingFromGraph(L.LightningModule):
+
+    def __init__(
+            self,
+            nn_model
+    ):
+        super().__init__()
+        self.model = nn_model
+
+    def predict_step(self, batch, batch_idx):
+        graph, graph_id = batch
+        return self.model.graph_pooling(graph), graph_id
