@@ -8,7 +8,7 @@ import polars as pl
 from dataset.utils.tools import collate_seq_embeddings
 
 
-class ResidueEmbeddingsDataset(Dataset):
+class EmbeddingsDataset(Dataset):
     def __init__(
             self,
             embedding_list,
@@ -24,9 +24,11 @@ class ResidueEmbeddingsDataset(Dataset):
 
         self.embedding = pl.DataFrame(
             data=[
-                (dom_id, os.path.join(embedding_path, f"{dom_id}.pt")) for dom_id in list(set(
-                    [row.strip() for row in open(embedding_list)]
-                ))
+                (dom_id, os.path.join(embedding_path, f"{dom_id}.pt"))
+                for dom_id in (
+                    embedding_list if type(embedding_list) is list
+                    else list(set([row.strip() for row in open(embedding_list)]))
+                )
             ],
             orient="row",
             schema=['dom_id', 'embedding'],
@@ -47,7 +49,7 @@ if __name__ == '__main__':
     parser.add_argument('--embedding_path', type=str, required=True)
     args = parser.parse_args()
 
-    dataset = ResidueEmbeddingsDataset(
+    dataset = EmbeddingsDataset(
         args.embedding_list,
         args.embedding_path
     )

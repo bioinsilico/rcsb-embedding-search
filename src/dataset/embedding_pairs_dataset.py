@@ -6,7 +6,7 @@ from torch.utils.data import Dataset, DataLoader
 import polars as pl
 
 
-class ResidueEmbeddingPairsDataset(Dataset):
+class EmbeddingPairsDataset(Dataset):
     def __init__(
             self,
             embedding_list,
@@ -36,9 +36,9 @@ class ResidueEmbeddingPairsDataset(Dataset):
         print(f"Total embeddings: {len(self.embedding)}")
 
     def load_pairs(self):
-        n = len(self.embedding)
+        n_embedding = len(self.embedding)
         self.pairs = pl.DataFrame(
-            data=[(i, j) for i in range(0, n) for j in range(i+1, n)],
+            data=[(i, j) for i in range(0, n_embedding) for j in range(i+1, n_embedding)],
             orient="row",
             schema=['i', 'j']
         )
@@ -84,7 +84,7 @@ if __name__ == '__main__':
     parser.add_argument('--embedding_path', type=str, required=True)
     args = parser.parse_args()
 
-    dataset = ResidueEmbeddingPairsDataset(
+    dataset = EmbeddingPairsDataset(
         args.embedding_list,
         args.embedding_path
     )

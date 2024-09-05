@@ -5,7 +5,7 @@ from hydra.utils import instantiate
 
 from torch.utils.data import DataLoader
 
-from dataset.residue_embeddings_dataset import ResidueEmbeddingsDataset
+from dataset.embeddings_dataset import EmbeddingsDataset
 from dataset.utils.tools import collate_seq_embeddings
 from lightning_module.inference.lightning_pst_embedding_pooling import LitStructurePstEmbeddingPooling
 from config_schema.config import InferenceConfig
@@ -17,7 +17,7 @@ cs.store(name="inference_default", node=InferenceConfig)
 @hydra.main(version_base=None, config_path="../../config", config_name="inference_config")
 def main(cfg: InferenceConfig):
 
-    inference_set = ResidueEmbeddingsDataset(
+    inference_set = EmbeddingsDataset(
         embedding_list=cfg.inference_set.embedding_source,
         embedding_path=cfg.inference_set.embedding_path
     )

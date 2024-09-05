@@ -7,14 +7,16 @@ from hydra.utils import instantiate
 from lightning import seed_everything
 from lightning.pytorch.plugins.environments import SLURMEnvironment
 from torch.utils.data import DataLoader
+from torch import stack
 
 from torch_geometric.loader import DataLoader as GraphDataLoader
 
+from callbacks.validation_reload import ReloadValidationDataLoaderCallback
 from dataset.tm_score_from_coord_dataset import TmScoreFromCoordDataset
 from dataset.tm_score_polars_dataset import TmScorePolarsDataset
 from dataset.utils.custom_weighted_random_sampler import CustomWeightedRandomSampler
 from dataset.utils.tm_score_weight import fraction_score, tm_score_weights
-from dataset.utils.tools import collate_fn
+
 from lightning_module.training.lightning_pst_graph import LitStructurePstGraph
 from config_schema.config import TrainingConfig
 
@@ -53,14 +55,18 @@ def main(cfg: TrainingConfig):
 
     validation_set = TmScorePolarsDataset(
         tm_score_file=cfg.validation_set.tm_score_file,
-        embedding_path=cfg.validation_set.data_path
+        embedding_path=cfg.validation_set.embedding_tmp_path
     )
     validation_dataloader = DataLoader(
         dataset=validation_set,
-        batch_size=cfg.training_set.batch_size,
+        batch_size=cfg.validation_set.batch_size,
         num_workers=cfg.computing_resources.workers,
         persistent_workers=True if cfg.computing_resources.workers > 0 else False,
-        collate_fn=collate_fn
+        collate_fn=lambda emb: (
+            stack([x for x, y, z in emb], dim=0),
+            stack([y for x, y, z in emb], dim=0),
+            tuple([z for x, y, z in emb])
+        )
     )
 
     nn_model = instantiate(
@@ -89,7 +95,7 @@ def main(cfg: TrainingConfig):
         num_nodes=cfg.computing_resources.nodes,
         devices=cfg.computing_resources.devices,
         strategy=cfg.computing_resources.strategy,
-        callbacks=[checkpoint_callback, lr_monitor],
+        callbacks=[checkpoint_callback, lr_monitor, ReloadValidationDataLoaderCallback()],
         plugins=[SLURMEnvironment(requeue_signal=signal.SIGUSR1)],
         default_root_dir=cfg.default_root_dir
     )
