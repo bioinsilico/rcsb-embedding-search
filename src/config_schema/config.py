@@ -51,9 +51,9 @@ class TMScoreDataset:
     tm_score_file: Path = MISSING
     data_path: Path = MISSING
     data_ext: Optional[DataExtension]
-    data_augmenter: Optional[Any]
     batch_size: int = MISSING
     embedding_tmp_path: Optional[Path]
+    data_augmenter: Optional[Any] = None
 
 
 @dataclass
