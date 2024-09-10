@@ -15,7 +15,7 @@ from dataset.utils.coords_augmenter import NullAugmenter, AbstractAugmenter, Sel
 from dataset.utils.custom_weighted_random_sampler import CustomWeightedRandomSampler
 from dataset.utils.embedding_builder import graph_builder
 from dataset.utils.tm_score_weight import binary_score, binary_weights, fraction_score, tm_score_weights
-from dataset.utils.tools import load_class_pairs_with_self_comparison
+from dataset.utils.tools import load_class_pairs_with_self_comparison, load_class_pairs
 from networks.transformer_pst import TransformerPstEmbeddingCosine
 
 d_type = np.float32
@@ -48,7 +48,8 @@ class TmScoreFromCoordDataset(Dataset):
         self.load_coords(tm_score_file, embedding_path, ext)
 
     def load_class_pairs(self, tm_score_file):
-        self.class_pairs = load_class_pairs_with_self_comparison(tm_score_file)
+        self.class_pairs = load_class_pairs(tm_score_file) if isinstance(self.coords_augmenter, NullAugmenter) \
+                           else load_class_pairs_with_self_comparison(tm_score_file)
         print(f"Total pairs: {len(self.class_pairs)}")
 
     def load_coords(self, tm_score_file, coords_path, ext):
