@@ -5,6 +5,7 @@ from polars import Schema, String, Float32
 
 
 def load_class_pairs(tm_score_file):
+    print(f"Loading pairs from {tm_score_file}")
     with open(tm_score_file) as file:
         return pl.DataFrame(
             data=[(lambda row: row.strip().split(","))(row) for row in file],
@@ -14,6 +15,7 @@ def load_class_pairs(tm_score_file):
 
 
 def load_class_pairs_with_self_comparison(tm_score_file):
+    print(f"Loading pairs from {tm_score_file} with self comparison")
     with open(tm_score_file) as file:
         return pl.DataFrame(
             data=[(lambda row: row.strip().split(","))(row) for row in file] + [[r, r, 1.] for r in list(set(
