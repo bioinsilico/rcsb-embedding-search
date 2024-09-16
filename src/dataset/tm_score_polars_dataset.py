@@ -1,7 +1,6 @@
 import argparse
 
 import torch
-from polars import Schema, String, Float32
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
 import polars as pl
@@ -9,7 +8,7 @@ import os
 
 from dataset.utils.custom_weighted_random_sampler import CustomWeightedRandomSampler
 from dataset.utils.tm_score_weight import tm_score_weights, fraction_score, binary_score, binary_weights
-from dataset.utils.tools import collate_fn
+from dataset.utils.tools import collate_fn, load_class_pairs
 
 d_type = np.float32
 
@@ -32,24 +31,20 @@ class TmScorePolarsDataset(Dataset):
 
     def __exec(self, tm_score_file, embedding_path):
         self.load_class_pairs(tm_score_file)
-        self.load_embedding(tm_score_file, embedding_path)
+        self.load_embedding(embedding_path)
 
     def load_class_pairs(self, tm_score_file):
-        self.class_pairs = pl.DataFrame(
-            data=[(lambda row: row.strip().split(","))(row) for row in open(tm_score_file)],
-            orient="row",
-            schema=Schema({'domain_i': String, 'domain_j': String, 'score': Float32})
-        )
+        print(f"Loading pairs from file {tm_score_file}")
+        self.class_pairs = load_class_pairs(tm_score_file)
         print(f"Total pairs: {len(self.class_pairs)}")
 
-    def load_embedding(self, tm_score_file, embedding_path):
-
+    def load_embedding(self, embedding_path):
+        print(f"Loading embeddings from path {embedding_path}")
         self.embedding = pl.DataFrame(
             data=[
-                (dom_id, os.path.join(embedding_path, f"{dom_id}.pt")) for dom_id in list(set(
-                    [(lambda row: row.strip().split(",")[0])(row) for row in open(tm_score_file)] +
-                    [(lambda row: row.strip().split(",")[1])(row) for row in open(tm_score_file)]
-                ))
+                (dom_id, os.path.join(embedding_path, f"{dom_id}.pt")) for dom_id in pl.concat([
+                    self.class_pairs["domain_i"], self.class_pairs["domain_j"]
+                ]).unique()
             ],
             orient="row",
             schema=['domain', 'embedding'],
@@ -57,7 +52,7 @@ class TmScorePolarsDataset(Dataset):
         print(f"Total embedding: {len(self.embedding)}")
 
     def weights(self):
-        return self.weighting_method([dp['score'] for dp in self.class_pairs.rows(named=True)])
+        return self.weighting_method(self.class_pairs.select('score'))
 
     def __len__(self):
         return len(self.class_pairs)

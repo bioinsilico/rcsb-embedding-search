@@ -45,14 +45,16 @@ class TmScoreFromCoordDataset(Dataset):
 
     def __exec(self, tm_score_file, embedding_path, ext):
         self.load_class_pairs(tm_score_file)
-        self.load_coords(tm_score_file, embedding_path, ext)
+        self.load_coords(embedding_path, ext)
 
     def load_class_pairs(self, tm_score_file):
-        self.class_pairs = load_class_pairs(tm_score_file) if isinstance(self.coords_augmenter, NullAugmenter) \
-                           else load_class_pairs_with_self_comparison(tm_score_file)
+        print(f"Loading pairs from file {tm_score_file}")
+        self.class_pairs = load_class_pairs(tm_score_file) if isinstance(self.coords_augmenter, NullAugmenter) else \
+                           load_class_pairs_with_self_comparison(tm_score_file)
         print(f"Total pairs: {len(self.class_pairs)}")
 
-    def load_coords(self, tm_score_file, coords_path, ext):
+    def load_coords(self, coords_path, ext):
+        print(f"Loading coords from path {coords_path}")
         self.coords = pl.DataFrame(
             data=[
                 (lambda coords: (
@@ -62,10 +64,9 @@ class TmScoreFromCoordDataset(Dataset):
                 ))(
                     get_coords_from_pdb_file(os.path.join(coords_path, f"{dom_id}{ext}"))
                 )
-                for dom_id in list(set(
-                    [(lambda row: row.strip().split(",")[0])(row) for row in open(tm_score_file)] +
-                    [(lambda row: row.strip().split(",")[1])(row) for row in open(tm_score_file)]
-                ))
+                for dom_id in pl.concat([
+                    self.class_pairs["domain_i"], self.class_pairs["domain_j"]
+                ]).unique()
             ],
             orient="row",
             schema=['domain', 'cas', 'seq']
@@ -73,7 +74,7 @@ class TmScoreFromCoordDataset(Dataset):
         print(f"Total structures: {len(self.coords)}")
 
     def weights(self):
-        return self.weighting_method([dp['score'] for dp in self.class_pairs.rows(named=True)])
+        return self.weighting_method(self.class_pairs.select('score'))
 
     def __build_graph(self, dom_id, add_change=lambda *abc: abc):
         coords_i = self.coords.row(
@@ -112,13 +113,13 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--tm_score_file', type=str, required=True)
     parser.add_argument('--pdb_path', type=str, required=True)
-    parser.add_argument('--pst_model_path', type=str, required=True)
+    # parser.add_argument('--pst_model_path', type=str, required=True)
     args = parser.parse_args()
 
     dataset = TmScoreFromCoordDataset(
         args.tm_score_file,
         args.pdb_path,
-        ext="",
+        ext="pdb",
         weighting_method=tm_score_weights(5),
         score_method=fraction_score,
         coords_augmenter=SelfAugmenterRandomFraction(

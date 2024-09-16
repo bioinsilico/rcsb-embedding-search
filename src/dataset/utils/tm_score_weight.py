@@ -1,11 +1,14 @@
 import math
 import torch
+import numpy as np
 
 
 def tm_score_weights(n_intervals):
-    def __tm_score_weights(scores):
-        class_weights = TmScoreWeight(scores, n_intervals)
-        return torch.tensor([class_weights.get_weight(s) for s in scores])
+    def __tm_score_weights(df_scores):
+        class_weights = TmScoreWeight(df_scores, n_intervals)
+        return torch.tensor(
+            np.vectorize(class_weights.get_weight)(df_scores['score'].to_numpy())
+        )
     return __tm_score_weights
 
 
@@ -16,10 +19,12 @@ def binary_score(thr):
 
 
 def binary_weights(thr):
-    def __binary_weights(scores):
-        p = 1 / sum([1 for s in scores if s >= thr])
-        n = 1 / sum([1 for s in scores if s < thr])
-        return torch.tensor([p if s >= thr else n for s in scores])
+    def __binary_weights(df_scores):
+        p = 1 / df_scores.filter(df_scores["score"] >= thr).shape[0]
+        n = 1 / df_scores.filter(df_scores["score"] < thr).shape[0]
+        return torch.tensor(
+            np.vectorize(lambda s: p if s >= thr else n)(df_scores['score'].to_numpy())
+        )
     return __binary_weights
 
 
@@ -29,22 +34,21 @@ def fraction_score(score):
 
 class TmScoreWeight:
 
-    def __init__(self, scores, n_intervals=5):
-        self.weights = []
+    def __init__(self, df_scores, n_intervals=5):
+        self.weights = np.array([])
         self.n_intervals = n_intervals
-        self.__compute(scores)
+        self.__compute(df_scores)
 
-    def __compute(self, scores):
+    def __compute(self, df_scores):
         h = 1 / self.n_intervals
         for idx in range(self.n_intervals):
-            f = sum([1 for s in scores if idx * h <= s < (idx + 1) * h])
+            f = df_scores.filter((df_scores["score"] >= idx * h) & (df_scores["score"] < (idx + 1) * h)).shape[0]
             print(f"Found {f} pairs in range {idx*h} <= s < {(idx + 1) * h}")
-            self.weights.append(
-                1 / f if f > 0 else 0
-            )
-        f = sum([1 for s in scores if s == 1.])
+            self.weights = np.append(self.weights, [1/f if f > 0. else 0.])
+
+        f = df_scores.filter(df_scores["score"] == 1.).shape[0]
         print(f"Found {f} pairs for s == 1")
-        self.weights.append(1 / f if f > 0 else 0)
+        self.weights = np.append(self.weights, [1/f if f > 0. else 0.])
 
     def get_weight(self, score):
         idx = math.floor(score * self.n_intervals)

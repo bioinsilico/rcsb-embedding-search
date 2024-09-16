@@ -5,26 +5,23 @@ from polars import Schema, String, Float32
 
 
 def load_class_pairs(tm_score_file):
-    print(f"Loading pairs from {tm_score_file}")
-    with open(tm_score_file) as file:
-        return pl.DataFrame(
-            data=[(lambda row: row.strip().split(","))(row) for row in file],
-            orient="row",
-            schema=Schema({'domain_i': String, 'domain_j': String, 'score': Float32})
-        )
+    return pl.read_csv(
+        source=tm_score_file,
+        schema=Schema({'domain_i': String, 'domain_j': String, 'score': Float32})
+    )
 
 
 def load_class_pairs_with_self_comparison(tm_score_file):
-    print(f"Loading pairs from {tm_score_file} with self comparison")
-    with open(tm_score_file) as file:
-        return pl.DataFrame(
-            data=[(lambda row: row.strip().split(","))(row) for row in file] + [[r, r, 1.] for r in list(set(
-                list(set([(lambda row: row.strip().split(",")[0])(row) for row in open(tm_score_file)])) +
-                list(set([(lambda row: row.strip().split(",")[1])(row) for row in open(tm_score_file)]))
-            ))],
-            orient="row",
-            schema=Schema({'domain_i': String, 'domain_j': String, 'score': Float32})
-        )
+    df = pl.read_csv(
+        source=tm_score_file,
+        schema=Schema({'domain_i': String, 'domain_j': String, 'score': Float32})
+    )
+    id_df = pl.DataFrame(
+        data=[[dom, dom, 1.] for dom in pl.concat([df["domain_i"], df["domain_j"]]).unique()],
+        orient="row",
+        schema=Schema({'domain_i': String, 'domain_j': String, 'score': Float32})
+    )
+    return pl.concat([df, id_df])
 
 
 def load_tensors(tensor_path, tm_score_file):
