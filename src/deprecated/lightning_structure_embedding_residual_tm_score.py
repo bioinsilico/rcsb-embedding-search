@@ -7,7 +7,7 @@ from lightning.pytorch.profilers import PyTorchProfiler
 
 from torch.utils.data import DataLoader
 
-from dataset.tm_score_polars_dataset import TmScorePolarsDataset
+from dataset.tm_score_from_embeddings_dataset import TmScoreFromEmbeddingsDataset
 # from src.dataset.tm_score_from_file_dataset import TmScoreFileDataset
 # from src.dataset.tm_score_dataset import TmScoreDataset
 
@@ -27,7 +27,7 @@ if __name__ == '__main__':
     test_classes = params.test_class_file
     test_embedding = params.test_embedding_path
 
-    training_set = TmScorePolarsDataset(
+    training_set = TmScoreFromEmbeddingsDataset(
         train_classes,
         train_embedding,
         score_method=fraction_score,
@@ -48,7 +48,7 @@ if __name__ == '__main__':
         collate_fn=collate_fn
     )
 
-    validation_set = TmScorePolarsDataset(
+    validation_set = TmScoreFromEmbeddingsDataset(
         test_classes,
         test_embedding
     )

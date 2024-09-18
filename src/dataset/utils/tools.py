@@ -1,39 +1,62 @@
 import os
 import torch
-import polars as pl
-from polars import Schema, String, Float32
+import pandas as pd
 
 
 def load_class_pairs(tm_score_file):
-    return pl.read_csv(
-        source=tm_score_file,
-        schema=Schema({'domain_i': String, 'domain_j': String, 'score': Float32})
+    dtype = {
+        'domain_i': 'str',
+        'domain_j': 'str',
+        'score': 'float32'
+    }
+    return pd.read_csv(
+        tm_score_file,
+        header=None,
+        index_col=None,
+        names=['domain_i', 'domain_j', 'score'],
+        dtype=dtype
     )
 
 
 def load_class_pairs_with_self_comparison(tm_score_file):
-    df = pl.read_csv(
-        source=tm_score_file,
-        schema=Schema({'domain_i': String, 'domain_j': String, 'score': Float32})
+    dtype = {
+        'domain_i': 'str',
+        'domain_j': 'str',
+        'score': 'float32'
+    }
+    df = pd.read_csv(
+        tm_score_file,
+        header=None,
+        index_col=None,
+        names=['domain_i', 'domain_j', 'score'],
+        dtype=dtype
     )
-    id_df = pl.DataFrame(
-        data=[[dom, dom, 1.] for dom in pl.concat([df["domain_i"], df["domain_j"]]).unique()],
-        orient="row",
-        schema=Schema({'domain_i': String, 'domain_j': String, 'score': Float32})
-    )
-    return pl.concat([df, id_df])
+    unique_domains = pd.concat([df["domain_i"], df["domain_j"]]).unique()
+    id_df = pd.DataFrame({
+        'domain_i': unique_domains,
+        'domain_j': unique_domains,
+        'score': 1.0
+    }, columns=['domain_i', 'domain_j', 'score'])
+    return pd.concat([df, id_df], ignore_index=True)
 
 
 def load_tensors(tensor_path, tm_score_file):
-    return pl.DataFrame(
+    dtype = {
+        'domain_i': 'str',
+        'domain_j': 'str',
+        'score': 'float32'
+    }
+    df = pd.read_csv(
+        tm_score_file,
+        header=False,
+        index_col=None,
+        dtype=dtype
+    )
+    return pd.DataFrame(
         data=[
-            (dom_id, os.path.join(tensor_path, f"{dom_id}.pt")) for dom_id in list(set(
-                [(lambda row: row.strip().split(",")[0])(row) for row in open(tm_score_file)] +
-                [(lambda row: row.strip().split(",")[1])(row) for row in open(tm_score_file)]
-            ))
+            (dom_id, os.path.join(tensor_path, f"{dom_id}.pt")) for dom_id in pd.concat([df["domain_i"], df["domain_j"]]).unique()
         ],
-        orient="row",
-        schema=['domain', 'embedding'],
+        names=['domain', 'embedding'],
     )
 
 

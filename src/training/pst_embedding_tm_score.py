@@ -13,7 +13,7 @@ from torch_geometric.loader import DataLoader as GraphDataLoader
 
 from callbacks.validation_reload import ReloadValidationDataLoaderCallback
 from dataset.tm_score_from_coord_dataset import TmScoreFromCoordDataset
-from dataset.tm_score_polars_dataset import TmScorePolarsDataset
+from dataset.tm_score_from_embeddings_dataset import TmScoreFromEmbeddingsDataset
 from dataset.utils.custom_weighted_random_sampler import CustomWeightedRandomSampler
 from dataset.utils.tm_score_weight import fraction_score, tm_score_weights
 
@@ -53,7 +53,7 @@ def main(cfg: TrainingConfig):
         persistent_workers=True if cfg.computing_resources.workers > 0 else False
     )
 
-    validation_set = TmScorePolarsDataset(
+    validation_set = TmScoreFromEmbeddingsDataset(
         tm_score_file=cfg.validation_set.tm_score_file,
         embedding_path=cfg.validation_set.embedding_tmp_path
     )

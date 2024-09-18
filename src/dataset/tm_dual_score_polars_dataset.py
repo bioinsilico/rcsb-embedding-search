@@ -1,10 +1,9 @@
 import argparse
 
 import torch
-from polars import Schema, String, Float32
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
-import polars as pl
+import pandas as pd
 import os
 
 from dataset.utils.custom_weighted_random_sampler import CustomWeightedRandomSampler
@@ -18,8 +17,8 @@ class TmDualScorePolarsDataset(Dataset):
     BINARY_THR = 0.7
 
     def __init__(self, tm_score_file, embedding_path, score_method=None, weighting_method=None):
-        self.embedding = pl.DataFrame()
-        self.class_pairs = pl.DataFrame()
+        self.embedding = pd.DataFrame()
+        self.class_pairs = pd.DataFrame()
         self.score_method = binary_score(self.BINARY_THR) if not score_method else score_method
         self.weighting_method = binary_weights(self.BINARY_THR) if not weighting_method else weighting_method
         self.__exec(tm_score_file, embedding_path)
@@ -30,22 +29,29 @@ class TmDualScorePolarsDataset(Dataset):
 
     def load_class_pairs(self, tm_score_file):
         print(f"Loading pairs from file {tm_score_file}")
-        self.class_pairs = pl.read_csv(
-            source=tm_score_file,
-            orient="row",
-            schema=Schema({'domain_i': String, 'domain_j': String, 'score-max': Float32, 'score-min': Float32})
+        dtype = {
+            'domain_i': 'str',
+            'domain_j': 'str',
+            'score-max': 'float32',
+            'score-min': 'float32'
+        }
+        self.class_pairs = pd.read_csv(
+            tm_score_file,
+            header=None,
+            index_col=None,
+            names=['domain_i', 'domain_j', 'score-max', 'score-min'],
+            dtype=dtype
         )
         print(f"Total pairs: {len(self.class_pairs)}")
 
     def load_embedding(self, embedding_path):
-        self.embedding = pl.DataFrame(
+        self.embedding = pd.DataFrame(
             data=[
-                (dom_id, os.path.join(embedding_path, f"{dom_id}.pt")) for dom_id in pl.concat([
+                (dom_id, os.path.join(embedding_path, f"{dom_id}.pt")) for dom_id in pd.concat([
                     self.class_pairs["domain_i"], self.class_pairs["domain_j"]
                 ]).unique()
             ],
-            orient="row",
-            schema=['domain', 'embedding'],
+            columns=['domain', 'embedding']
         )
         print(f"Total embedding: {len(self.embedding)}")
 
@@ -56,21 +62,23 @@ class TmDualScorePolarsDataset(Dataset):
         return len(self.class_pairs)
 
     def __getitem__(self, idx):
+        domain_i = self.class_pairs.loc[idx, 'domain_i']
+        row_i = self.embedding.loc[self.embedding['domain'] == domain_i]
+        embedding_i = row_i['embedding'].values[0]
+
+        domain_j = self.class_pairs.loc[idx, 'domain_j']
+        row_j = self.embedding.loc[self.embedding['domain'] == domain_j]
+        embedding_j = row_j['embedding'].values[0]
+
         return (
-            torch.load(self.embedding.row(
-                by_predicate=(pl.col("domain") == self.class_pairs.row(idx, named=True)['domain_i']),
-                named=True
-            )['embedding']),
-            torch.load(self.embedding.row(
-                by_predicate=(pl.col("domain") == self.class_pairs.row(idx, named=True)['domain_j']),
-                named=True
-            )['embedding']),
+            torch.load(embedding_i),
+            torch.load(embedding_j),
             (
                 torch.from_numpy(
-                    np.array(self.score_method(self.class_pairs.row(idx, named=True)['score-max']), dtype=d_type)
+                    np.array(self.score_method(self.class_pairs.loc[idx, 'score-max']), dtype=d_type)
                 ),
                 torch.from_numpy(
-                    np.array(self.score_method(self.class_pairs.row(idx, named=True)['score-min']), dtype=d_type)
+                    np.array(self.score_method(self.class_pairs.loc[idx, 'score-min']), dtype=d_type)
                 )
             )
         )

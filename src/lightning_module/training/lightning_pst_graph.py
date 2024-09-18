@@ -1,4 +1,4 @@
-import torch.nn as nn
+from torch import sum
 
 from lightning_module.training.lightning_batch_graph import LitStructureBatchGraph
 
@@ -16,6 +16,4 @@ class LitStructurePstGraph(LitStructureBatchGraph):
     def validation_step(self, batch, batch_idx):
         x, y, z = batch
         self.z.append(z)
-        self.z_pred.append(
-            nn.functional.cosine_similarity(x, y)
-        )
+        self.z_pred.append(sum(x*y, dim=1))

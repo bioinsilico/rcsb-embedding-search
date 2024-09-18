@@ -3,7 +3,7 @@ import os
 
 import torch
 from torch.utils.data import Dataset, DataLoader
-import polars as pl
+import pandas as pd
 
 from dataset.utils.tools import collate_seq_embeddings
 
@@ -14,7 +14,7 @@ class EmbeddingsDataset(Dataset):
             embedding_list,
             embedding_path
     ):
-        self.embedding = pl.DataFrame()
+        self.embedding = pd.DataFrame()
         self.__exec(embedding_list, embedding_path)
 
     def __exec(self, embedding_list, embedding_path):
@@ -22,7 +22,7 @@ class EmbeddingsDataset(Dataset):
 
     def load_embedding(self, embedding_list, embedding_path):
         print(f"Loading embeddings from path {embedding_path}")
-        self.embedding = pl.DataFrame(
+        self.embedding = pd.DataFrame(
             data=[
                 (dom_id, os.path.join(embedding_path, f"{dom_id}.pt"))
                 for dom_id in (
@@ -30,8 +30,7 @@ class EmbeddingsDataset(Dataset):
                     else list(set([row.strip() for row in open(embedding_list)]))
                 )
             ],
-            orient="row",
-            schema=['dom_id', 'embedding'],
+            columns=['dom_id', 'embedding'],
         )
         print(f"Total embeddings: {len(self.embedding)}")
 
@@ -39,8 +38,7 @@ class EmbeddingsDataset(Dataset):
         return len(self.embedding)
 
     def __getitem__(self, idx):
-        emb = self.embedding.row(idx, named=True)
-        return torch.load(emb['embedding']), emb['dom_id']
+        return torch.load(self.embedding.loc[idx, 'embedding']), self.embedding.loc[idx, 'dom_id']
 
 
 if __name__ == '__main__':

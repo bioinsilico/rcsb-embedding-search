@@ -1,7 +1,7 @@
 import os.path
 from collections import deque
 
-import polars as pl
+import pandas as pd
 import lightning as L
 import torch
 from torch.utils.data import DataLoader
@@ -18,10 +18,11 @@ class ReloadValidationDataLoaderCallback(L.Callback):
     def on_validation_epoch_start(self, trainer, pl_module):
         cfg = pl_module.cfg
         class_pairs = load_class_pairs(cfg.validation_set.tm_score_file)
+        print("Generating validation embeddings")
         dataset = EmbeddingsDataset(
-            pl.concat([
+            list(pd.concat([
                 class_pairs["domain_i"], class_pairs["domain_j"]
-            ]).unique().to_list(),
+            ]).unique()),
             pl_module.cfg.validation_set.data_path
         )
         dataloader = DataLoader(

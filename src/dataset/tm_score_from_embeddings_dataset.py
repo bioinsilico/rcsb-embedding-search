@@ -3,7 +3,7 @@ import argparse
 import torch
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
-import polars as pl
+import pandas as pd
 import os
 
 from dataset.utils.custom_weighted_random_sampler import CustomWeightedRandomSampler
@@ -13,7 +13,7 @@ from dataset.utils.tools import collate_fn, load_class_pairs
 d_type = np.float32
 
 
-class TmScorePolarsDataset(Dataset):
+class TmScoreFromEmbeddingsDataset(Dataset):
     BINARY_THR = 0.7
 
     def __init__(
@@ -23,8 +23,8 @@ class TmScorePolarsDataset(Dataset):
             score_method=None,
             weighting_method=None
     ):
-        self.embedding = pl.DataFrame()
-        self.class_pairs = pl.DataFrame()
+        self.embedding = pd.DataFrame()
+        self.class_pairs = pd.DataFrame()
         self.score_method = binary_score(self.BINARY_THR) if not score_method else score_method
         self.weighting_method = binary_weights(self.BINARY_THR) if not weighting_method else weighting_method
         self.__exec(tm_score_file, embedding_path)
@@ -40,14 +40,13 @@ class TmScorePolarsDataset(Dataset):
 
     def load_embedding(self, embedding_path):
         print(f"Loading embeddings from path {embedding_path}")
-        self.embedding = pl.DataFrame(
+        self.embedding = pd.DataFrame(
             data=[
-                (dom_id, os.path.join(embedding_path, f"{dom_id}.pt")) for dom_id in pl.concat([
+                (dom_id, os.path.join(embedding_path, f"{dom_id}.pt")) for dom_id in pd.concat([
                     self.class_pairs["domain_i"], self.class_pairs["domain_j"]
                 ]).unique()
             ],
-            orient="row",
-            schema=['domain', 'embedding'],
+            columns=['domain', 'embedding']
         )
         print(f"Total embeddings: {len(self.embedding)}")
 
@@ -58,17 +57,19 @@ class TmScorePolarsDataset(Dataset):
         return len(self.class_pairs)
 
     def __getitem__(self, idx):
+        domain_i = self.class_pairs.loc[idx, 'domain_i']
+        row_i = self.embedding.loc[self.embedding['domain'] == domain_i]
+        embedding_i = row_i['embedding'].values[0]
+
+        domain_j = self.class_pairs.loc[idx, 'domain_j']
+        row_j = self.embedding.loc[self.embedding['domain'] == domain_j]
+        embedding_j = row_j['embedding'].values[0]
+
         return (
-            torch.load(self.embedding.row(
-                by_predicate=(pl.col("domain") == self.class_pairs.row(idx, named=True)['domain_i']),
-                named=True
-            )['embedding']),
-            torch.load(self.embedding.row(
-                by_predicate=(pl.col("domain") == self.class_pairs.row(idx, named=True)['domain_j']),
-                named=True
-            )['embedding']),
+            torch.load(embedding_i),
+            torch.load(embedding_j),
             torch.from_numpy(
-                np.array(self.score_method(self.class_pairs.row(idx, named=True)['score']), dtype=d_type)
+                np.array(self.score_method(self.class_pairs.loc[idx, 'score']), dtype=d_type)
             )
         )
 
@@ -79,7 +80,7 @@ if __name__ == '__main__':
     parser.add_argument('--embedding_path', type=str, required=True)
     args = parser.parse_args()
 
-    dataset = TmScorePolarsDataset(
+    dataset = TmScoreFromEmbeddingsDataset(
         args.tm_score_file,
         args.embedding_path,
         score_method=fraction_score,
