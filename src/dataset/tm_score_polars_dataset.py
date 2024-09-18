@@ -49,7 +49,7 @@ class TmScorePolarsDataset(Dataset):
             orient="row",
             schema=['domain', 'embedding'],
         )
-        print(f"Total embedding: {len(self.embedding)}")
+        print(f"Total embeddings: {len(self.embedding)}")
 
     def weights(self):
         return self.weighting_method(self.class_pairs.select('score'))

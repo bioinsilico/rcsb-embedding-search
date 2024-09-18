@@ -21,7 +21,7 @@ class EmbeddingsDataset(Dataset):
         self.load_embedding(embedding_list, embedding_path)
 
     def load_embedding(self, embedding_list, embedding_path):
-
+        print(f"Loading embeddings from path {embedding_path}")
         self.embedding = pl.DataFrame(
             data=[
                 (dom_id, os.path.join(embedding_path, f"{dom_id}.pt"))
@@ -33,7 +33,7 @@ class EmbeddingsDataset(Dataset):
             orient="row",
             schema=['dom_id', 'embedding'],
         )
-        print(f"Total embedding: {len(self.embedding)}")
+        print(f"Total embeddings: {len(self.embedding)}")
 
     def __len__(self):
         return len(self.embedding)

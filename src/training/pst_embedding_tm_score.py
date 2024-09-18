@@ -65,7 +65,7 @@ def main(cfg: TrainingConfig):
         collate_fn=lambda emb: (
             stack([x for x, y, z in emb], dim=0),
             stack([y for x, y, z in emb], dim=0),
-            tuple([z for x, y, z in emb])
+            stack([z for x, y, z in emb], dim=0)
         )
     )
 

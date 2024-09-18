@@ -1,12 +1,13 @@
 import os.path
 from collections import deque
 
+import polars as pl
 import lightning as L
 import torch
 from torch.utils.data import DataLoader
 
 from dataset.embeddings_dataset import EmbeddingsDataset
-from dataset.utils.tools import collate_seq_embeddings
+from dataset.utils.tools import collate_seq_embeddings, load_class_pairs
 
 
 class ReloadValidationDataLoaderCallback(L.Callback):
@@ -14,16 +15,13 @@ class ReloadValidationDataLoaderCallback(L.Callback):
     def __init__(self):
         self.validation_loader = None
 
-    def on_validation_start(self, trainer, pl_module):
-        print("on_validation_start")
-
     def on_validation_epoch_start(self, trainer, pl_module):
         cfg = pl_module.cfg
+        class_pairs = load_class_pairs(cfg.validation_set.tm_score_file)
         dataset = EmbeddingsDataset(
-            list(set(
-                get_column_from_file(cfg.validation_set.tm_score_file, 0) +
-                get_column_from_file(cfg.validation_set.tm_score_file, 1)
-            )),
+            pl.concat([
+                class_pairs["domain_i"], class_pairs["domain_j"]
+            ]).unique().to_list(),
             pl_module.cfg.validation_set.data_path
         )
         dataloader = DataLoader(
@@ -34,13 +32,13 @@ class ReloadValidationDataLoaderCallback(L.Callback):
                 tuple([z for x, z in emb])
             )
         )
-
         compute_embeddings(
             pl_module.model.embedding_pooling,
             pl_module.device,
             pl_module.cfg.validation_set.embedding_tmp_path,
             dataloader
         )
+        print(f"New validation embeddings available {pl_module.cfg.validation_set.embedding_tmp_path}")
 
 
 def compute_embeddings(embedding_pooling, device, out_path, dataloader):
@@ -63,6 +61,3 @@ def save_embedding(embedding, path):
         path
     )
 
-
-def get_column_from_file(file_name, column_n):
-    return [row.strip().split(",")[column_n] for row in open(file_name)]
