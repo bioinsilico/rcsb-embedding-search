@@ -3,7 +3,7 @@ import os
 
 import torch
 from torch.utils.data import Dataset, DataLoader
-import polars as pl
+import pandas as pd
 
 
 class EmbeddingPairsDataset(Dataset):
@@ -21,7 +21,7 @@ class EmbeddingPairsDataset(Dataset):
         self.load_pairs()
 
     def load_embedding(self, embedding_list, embedding_path):
-        self.embedding = pl.DataFrame(
+        self.embedding = pd.DataFrame(
             data=[
                 (
                     row[0],
@@ -30,17 +30,15 @@ class EmbeddingPairsDataset(Dataset):
                 )
                 for row in [row.strip().split("\t") for row in open(embedding_list)]
             ],
-            orient="row",
-            schema=['dom_id', 'class_id', 'embedding'],
+            columns=['dom_id', 'class_id', 'embedding'],
         )
         print(f"Total embeddings: {len(self.embedding)}")
 
     def load_pairs(self):
         n_embedding = len(self.embedding)
-        self.pairs = pl.DataFrame(
+        self.pairs = pd.DataFrame(
             data=[(i, j) for i in range(0, n_embedding) for j in range(i+1, n_embedding)],
-            orient="row",
-            schema=['i', 'j']
+            columns=['i', 'j']
         )
         print(f"Total pairs: {len(self.pairs)}")
 
@@ -48,10 +46,10 @@ class EmbeddingPairsDataset(Dataset):
         return len(self.pairs)
 
     def __getitem__(self, idx):
-        idx_i = self.pairs.row(idx, named=True)['i']
-        idx_j = self.pairs.row(idx, named=True)['j']
-        emb_i = self.embedding.row(idx_i, named=True)
-        emb_j = self.embedding.row(idx_j, named=True)
+        idx_i = self.pairs.loc[idx, 'i']
+        idx_j = self.pairs.loc[idx, 'j']
+        emb_i = self.embedding.loc[idx_i]
+        emb_j = self.embedding.loc[idx_j]
         return (
             (emb_i['embedding'], emb_i['dom_id'], emb_i['class_id']),
             (emb_j['embedding'], emb_j['dom_id'], emb_j['class_id'])

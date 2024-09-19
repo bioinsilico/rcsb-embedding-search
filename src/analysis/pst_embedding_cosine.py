@@ -30,7 +30,6 @@ def main(cfg: InferenceConfig):
     model = LitStructurePstEmbeddingCosine()
     trainer = L.Trainer(
         callbacks=[],
-        accelerator='cpu',
         devices=cfg.computing_resources.devices
     )
     trainer.predict(
