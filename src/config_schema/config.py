@@ -27,7 +27,7 @@ class InferenceConfig:
     network_parameters: NetworkParams = MISSING
     embedding_network: Any = MISSING
     inference_set: EmbeddingDataset = MISSING
-    inference_writer: Any = MISSING
+    inference_writer: InferenceWriter = MISSING
 
 
 @dataclass
@@ -76,6 +76,14 @@ class ComputingResources:
     nodes: int = 1
 
 
+@dataclass
+class InferenceWriter:
+    _target_: Any
+    output_path: Path
+    postfix: str
+    write_interval: WriteInterval
+
+
 class LrInterval(str, Enum):
     epoch = "epoch"
     step = "step"
@@ -92,3 +100,9 @@ class DataExtension(str, Enum):
     mmcif = "mmcif"
     bcif = "bcif"
     none = ""
+
+
+class WriteInterval(str, Enum):
+    batch = "batch"
+    epoch = "epoch"
+    batch_and_epoch = "batch_and_epoch"

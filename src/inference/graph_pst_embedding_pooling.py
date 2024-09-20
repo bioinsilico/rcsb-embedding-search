@@ -17,7 +17,9 @@ def main(cfg: InferenceConfig):
 
     inference_set = GraphFromListDataset(
         graph_list=cfg.inference_set.embedding_source,
-        graph_path=cfg.inference_set.embedding_path
+        graph_path=cfg.inference_set.embedding_path,
+        output_path=cfg.inference_writer.output_path,
+        postfix=cfg.inference_writer.postfix
     )
 
     inference_dataloader = DataLoader(
