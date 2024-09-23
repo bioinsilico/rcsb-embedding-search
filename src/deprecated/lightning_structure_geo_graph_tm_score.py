@@ -7,7 +7,7 @@ from torch_geometric.data.lightning import LightningDataset
 
 from torch_geometric.loader import DataLoader
 
-from dataset.geo_graph_dataset import GeoGraphDataset
+from deprecated.dataset.geo_graph_dataset import GeoGraphDataset
 from dataset.utils.custom_weighted_random_sampler import CustomWeightedRandomSampler
 from dataset.utils.tm_score_weight import fraction_score, tm_score_weights
 from lightning_module.training.lightning_batch_graph import LitStructureBatchGraph

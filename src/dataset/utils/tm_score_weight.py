@@ -34,9 +34,15 @@ def fraction_score(score):
 
 class TmScoreWeight:
 
-    def __init__(self, np_scores, n_intervals=5):
+    def __init__(
+            self,
+            np_scores,
+            n_intervals=5,
+            identity_scale_factor=1.
+    ):
         self.weights = np.array([])
-        self.n_intervals = n_intervals
+        self.n_intervals = n_intervals,
+        self.identity_scale_factor = identity_scale_factor
         self.__compute(np_scores)
 
     def __compute(self, np_scores):
@@ -45,7 +51,7 @@ class TmScoreWeight:
             f = np.sum((np_scores >= idx*h) & (np_scores < (idx+1)*h))
             print(f"Found {f} pairs in range {idx*h} <= s < {(idx + 1) * h}")
             self.weights = np.append(self.weights, [1/f if f > 0. else 0.])
-        f = np.sum(np_scores == 1.)
+        f = self.identity_scale_factor * np.sum(np_scores == 1.)
         print(f"Found {f} pairs for s == 1")
         self.weights = np.append(self.weights, [1/f if f > 0. else 0.])
 

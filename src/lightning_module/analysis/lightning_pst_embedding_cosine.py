@@ -23,5 +23,6 @@ class LitStructurePstEmbeddingScore(L.LightningModule):
 
     def predict_step(self, batch, batch_idx):
         g_i, g_j, z = batch
-        print(self.model(g_i, g_j))
-        return self.model(g_i, g_j)
+        score = self.model(g_i, g_j)
+        print("\n", score)
+        return score

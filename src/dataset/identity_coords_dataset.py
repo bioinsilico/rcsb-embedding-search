@@ -5,7 +5,7 @@ import os
 from torch_geometric.data import Dataset
 import pandas as pd
 
-from dataset.utils.biopython_getter import get_coords_from_pdb_file
+from dataset.utils.biopython_getter import get_coords_from_pdb_file, get_coords_from_cif_file
 from dataset.utils.coords_augmenter import AbstractAugmenter, NullAugmenter
 from dataset.utils.embedding_builder import graph_builder
 
@@ -38,7 +38,8 @@ class IdentityCoordsDataset(Dataset):
                     coords['cas'],
                     coords['seq']
                 ))(
-                    get_coords_from_pdb_file(os.path.join(coords_path, f"{row[0]}.{ext}"))
+                    get_coords_from_pdb_file(os.path.join(coords_path, f"{row[0]}.{ext}")) if ext == "pdb" or ext == "ent" else
+                    get_coords_from_cif_file(os.path.join(coords_path, f"{row[0]}.{ext}"))
                 )
                 for row in [row.strip().split("\t") for row in open(coords_list)]
             ],
