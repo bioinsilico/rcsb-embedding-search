@@ -41,7 +41,7 @@ class TmScoreWeight:
             identity_scale_factor=1.
     ):
         self.weights = np.array([])
-        self.n_intervals = n_intervals,
+        self.n_intervals = n_intervals
         self.identity_scale_factor = identity_scale_factor
         self.__compute(np_scores)
 
