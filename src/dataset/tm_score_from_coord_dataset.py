@@ -62,7 +62,7 @@ class TmScoreFromCoordDataset(Dataset):
                     coords['cas'],
                     coords['seq']
                 ))(
-                    get_coords_from_pdb_file(os.path.join(coords_path, f"{dom_id}{ext}")) if ext == "pdb" or ext == "ent" else
+                    get_coords_from_pdb_file(os.path.join(coords_path, f"{dom_id}{ext}")) if ext == ".pdb" or ext == ".ent" else
                     get_coords_from_cif_file(os.path.join(coords_path, f"{dom_id}{ext}"))
                 )
                 for dom_id in pd.concat([
