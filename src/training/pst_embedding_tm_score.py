@@ -40,6 +40,7 @@ def main(cfg: TrainingConfig):
         score_method=fraction_score,
         weighting_method=tm_score_weights(5),
         num_workers=cfg.computing_resources.workers,
+        include_self_comparison=cfg.training_set.include_self_comparison,
         coords_augmenter=instantiate(
             cfg.training_set.data_augmenter
         ) if cfg.training_set.data_augmenter is not None else None

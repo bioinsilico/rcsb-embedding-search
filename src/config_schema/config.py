@@ -54,6 +54,7 @@ class TMScoreDataset:
     batch_size: int = MISSING
     embedding_tmp_path: Optional[Path]
     data_augmenter: Optional[Any] = None
+    include_self_comparison: Optional[bool] = False
 
 
 @dataclass

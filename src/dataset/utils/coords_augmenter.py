@@ -38,21 +38,33 @@ class SelfAugmenterRandomFraction(AbstractAugmenter):
         return _remove_random_fraction_residues(self.fraction, self.max_remove)
 
 
-def _remove_random_fraction_residues(fraction, max_remove):
+class SegmentPermutationAugmenter(AbstractAugmenter):
 
+    def __init__(self, permute_prob=0.1, n_splits=5):
+        self.permute_prob = permute_prob
+        self.n_splits = n_splits
+
+    def add_change(self, dom_i, dom_j, dom_op):
+        if _with_probability(self.permute_prob):
+            return _random_permute_regions(self.n_splits)
+        return lambda *x: x
+
+
+def _remove_random_fraction_residues(fraction, max_remove):
     def __remove_random_fraction_from_multiple_lists(*lists):
-        if not lists:
+        result = [lst.copy() for lst in lists]
+        if not result:
             raise ValueError("At least one list must be provided")
-        list_lengths = [len(lst) for lst in lists]
+        list_lengths = [len(lst) for lst in result]
         n_remove = math.floor(fraction * list_lengths[0])
         if n_remove == 0:
-            return lists
-        n_remove = random.randrange(0, min(n_remove, max_remove))
+            return result
+        n_remove = random.randrange(1, min(n_remove, max_remove) + 1)
         indices_to_remove = random.sample(range(list_lengths[0]), n_remove)
-        for lst in lists:
+        for lst in result:
             for index in sorted(indices_to_remove, reverse=True):
                 del lst[index]
-        return lists
+        return result
     return __remove_random_fraction_from_multiple_lists
 
 
@@ -68,18 +80,35 @@ def _remove_random_residues(n):
             for index in sorted(indices_to_remove, reverse=True):
                 del lst[index]
         return lists
-
     return __remove_n_random_elements_from_multiple_lists
 
 
-def _with_probability(probability):
-    """
-    Returns True with the given probability.
+def _random_permute_regions(n_splits):
+    def ___random_permute_list_regions(*lists):
+        if not lists:
+            raise ValueError("At least one list must be provided")
+        n = len(lists[0])
+        list_lengths = [len(lst) for lst in lists]
+        if any(length != n for length in list_lengths):
+            raise ValueError("all lists should have he same length")
+        return _permute_regions_lists(lists, random.randrange(2, n_splits))
+    return ___random_permute_list_regions
 
-    :param probability: A float between 0 and 1 representing the probability of returning True.
-    :return: True with the given probability, otherwise False.
-    """
+
+def _with_probability(probability):
     if not 0 <= probability <= 1:
         raise ValueError("Probability must be between 0 and 1.")
-
     return random.random() < probability
+
+
+def _permute_regions_lists(lst_of_lists, n):
+    region_indices = list(range(n))
+    random.shuffle(region_indices)
+    result = []
+    for lst in lst_of_lists:
+        lst_len = len(lst)
+        regions = [lst[i * lst_len // n : (i + 1) * lst_len // n] for i in range(n)]
+        permuted_regions = [regions[i] for i in region_indices]
+        permuted_list = [elem for region in permuted_regions for elem in region]
+        result.append(permuted_list)
+    return result

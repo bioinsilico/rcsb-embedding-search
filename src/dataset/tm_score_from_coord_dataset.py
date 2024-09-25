@@ -34,7 +34,8 @@ class TmScoreFromCoordDataset(Dataset):
             score_method=None,
             weighting_method=None,
             coords_augmenter: AbstractAugmenter | None = NullAugmenter(),
-            num_workers=1
+            num_workers=1,
+            include_self_comparison=False
     ):
         super().__init__()
         self.coords = pd.DataFrame()
@@ -43,6 +44,7 @@ class TmScoreFromCoordDataset(Dataset):
         self.weighting_method = binary_weights(self.BINARY_THR) if not weighting_method else weighting_method
         self.coords_augmenter = NullAugmenter() if coords_augmenter is None else coords_augmenter
         self.nun_workers = num_workers if num_workers > 1 else 1
+        self.include_self_comparison = include_self_comparison
         self.__exec(tm_score_file, coords_path, f".{ext}" if len(ext) > 0 else "")
 
     def __exec(self, tm_score_file, embedding_path, ext):
@@ -51,8 +53,10 @@ class TmScoreFromCoordDataset(Dataset):
 
     def load_class_pairs(self, tm_score_file):
         logger.info(f"Loading pairs from file {tm_score_file}")
-        self.class_pairs = load_class_pairs(tm_score_file) if isinstance(self.coords_augmenter, NullAugmenter) else \
-                           load_class_pairs_with_self_comparison(tm_score_file)
+        if self.include_self_comparison:
+            self.class_pairs = load_class_pairs_with_self_comparison(tm_score_file)
+        else:
+            self.class_pairs = load_class_pairs(tm_score_file)
         logger.info(f"Total pairs: {len(self.class_pairs)}")
 
     def load_coords(self, coords_path, ext):
