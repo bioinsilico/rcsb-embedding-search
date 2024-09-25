@@ -61,7 +61,7 @@ class ReloadValidationDataLoaderCallback(L.Callback):
                 dataloader
         ):
             self.embedding_provider.update(dom_id, embedding.tolist())
-        logger.info(f"New validation embeddings available")
+        logger.info(f"New validation embeddings available from {self.source}, device: {self.device}, rank: {self.rank}")
 
 
 def compute_embeddings(embedding_pooling, device, dataloader):
