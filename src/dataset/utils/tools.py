@@ -17,6 +17,11 @@ def load_class_pairs(tm_score_file):
         dtype=dtype
     )
 
+def get_unique_pairs(tm_score_file):
+    class_pairs = load_class_pairs(tm_score_file)
+    return list(pd.concat([
+        class_pairs["domain_i"], class_pairs["domain_j"]
+    ]).unique())
 
 def load_class_pairs_with_self_comparison(tm_score_file):
     dtype = {
