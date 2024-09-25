@@ -21,7 +21,7 @@ from dataset.utils.embedding_provider import DiskEmbeddingProvider, SqliteEmbedd
 from dataset.utils.tm_score_weight import fraction_score, tm_score_weights
 
 from lightning_module.training.lightning_pst_graph import LitStructurePstGraph
-from config_schema.config import TrainingConfig
+from config.schema_config import TrainingConfig
 
 
 cs = ConfigStore.instance()

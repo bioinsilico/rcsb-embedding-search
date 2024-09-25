@@ -6,7 +6,7 @@ from torch_geometric.loader import DataLoader
 
 from dataset.graph_from_list_dataset import GraphFromListDataset
 from lightning_module.inference.lightning_pst_embedding_pooling import LitStructurePstEmbeddingPoolingFromGraph
-from config_schema.config import InferenceConfig
+from config.schema_config import InferenceConfig
 
 cs = ConfigStore.instance()
 cs.store(name="inference_default", node=InferenceConfig)

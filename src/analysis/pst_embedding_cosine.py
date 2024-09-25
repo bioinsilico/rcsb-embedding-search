@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 
 from dataset.embedding_pairs_dataset import EmbeddingPairsDataset, collate
 from lightning_module.analysis.lightning_pst_embedding_cosine import LitStructurePstEmbeddingCosine
-from config_schema.config import InferenceConfig
+from config.schema_config import InferenceConfig
 
 cs = ConfigStore.instance()
 cs.store(name="inference_default", node=InferenceConfig)

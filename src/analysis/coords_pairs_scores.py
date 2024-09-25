@@ -6,7 +6,7 @@ from torch_geometric.data import DataLoader
 
 from dataset.tm_score_from_coord_dataset import TmScoreFromCoordDataset
 from dataset.utils.coords_augmenter import SelfAugmenterRandomFraction
-from config_schema.config import TrainingConfig
+from config.schema_config import TrainingConfig
 from lightning_module.analysis.lightning_pst_embedding_cosine import LitStructurePstEmbeddingScore
 
 cs = ConfigStore.instance()

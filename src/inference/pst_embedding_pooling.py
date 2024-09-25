@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 from dataset.embeddings_dataset import EmbeddingsDataset
 from dataset.utils.tools import collate_seq_embeddings
 from lightning_module.inference.lightning_pst_embedding_pooling import LitStructurePstEmbeddingPooling
-from config_schema.config import InferenceConfig
+from config.schema_config import InferenceConfig
 
 cs = ConfigStore.instance()
 cs.store(name="inference_default", node=InferenceConfig)
