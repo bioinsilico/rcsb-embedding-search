@@ -1,8 +1,10 @@
+import logging
 import signal
 
 import hydra
 import lightning as L
 from hydra.core.config_store import ConfigStore
+from hydra.core.hydra_config import HydraConfig
 from hydra.utils import instantiate
 from lightning import seed_everything
 from lightning.pytorch.plugins.environments import SLURMEnvironment
@@ -13,19 +15,23 @@ from torch_geometric.loader import DataLoader as GraphDataLoader
 
 from callbacks.validation_reload import ReloadValidationDataLoaderCallback
 from dataset.tm_score_from_coord_dataset import TmScoreFromCoordDataset
-from dataset.tm_score_from_embeddings_dataset import TmScoreFromEmbeddingsDataset
+from dataset.tm_score_from_embeddings_provider_dataset import TmScoreFromEmbeddingsProviderDataset
 from dataset.utils.custom_weighted_random_sampler import CustomWeightedRandomSampler
+from dataset.utils.embedding_provider import DiskEmbeddingProvider, SqliteEmbeddingProvider
 from dataset.utils.tm_score_weight import fraction_score, tm_score_weights
 
 from lightning_module.training.lightning_pst_graph import LitStructurePstGraph
 from config_schema.config import TrainingConfig
 
+
 cs = ConfigStore.instance()
 cs.store(name="training_default", node=TrainingConfig)
+logger = logging.getLogger(__name__)
 
 
 @hydra.main(version_base=None, config_path="../../config", config_name="training_config")
 def main(cfg: TrainingConfig):
+    logger.info(f"Using config file: {HydraConfig.get().job.config_name}")
     seed_everything(cfg.global_seed, workers=True)
     training_set = TmScoreFromCoordDataset(
         tm_score_file=cfg.training_set.tm_score_file,
@@ -53,9 +59,11 @@ def main(cfg: TrainingConfig):
         persistent_workers=True if cfg.computing_resources.workers > 0 else False
     )
 
-    validation_set = TmScoreFromEmbeddingsDataset(
+    embedding_provider = SqliteEmbeddingProvider()
+
+    validation_set = TmScoreFromEmbeddingsProviderDataset(
         tm_score_file=cfg.validation_set.tm_score_file,
-        embedding_path=cfg.validation_set.embedding_tmp_path
+        embedding_provider=embedding_provider
     )
     validation_dataloader = DataLoader(
         dataset=validation_set,
@@ -76,7 +84,7 @@ def main(cfg: TrainingConfig):
     model = LitStructurePstGraph(
         nn_model=nn_model,
         learning_rate=cfg.training_parameters.learning_rate,
-        params=cfg,
+        params=cfg
     )
 
     checkpoint_callback = L.pytorch.callbacks.ModelCheckpoint(
@@ -95,7 +103,7 @@ def main(cfg: TrainingConfig):
         num_nodes=cfg.computing_resources.nodes,
         devices=cfg.computing_resources.devices,
         strategy=cfg.computing_resources.strategy,
-        callbacks=[checkpoint_callback, lr_monitor, ReloadValidationDataLoaderCallback()],
+        callbacks=[checkpoint_callback, lr_monitor, ReloadValidationDataLoaderCallback(embedding_provider)],
         plugins=[SLURMEnvironment(requeue_signal=signal.SIGUSR1)],
         default_root_dir=cfg.default_root_dir
     )

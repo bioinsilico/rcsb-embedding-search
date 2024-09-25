@@ -1,6 +1,9 @@
+import logging
 import math
 import torch
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 def tm_score_weights(n_intervals):
@@ -49,10 +52,10 @@ class TmScoreWeight:
         h = 1 / self.n_intervals
         for idx in range(self.n_intervals):
             f = np.sum((np_scores >= idx*h) & (np_scores < (idx+1)*h))
-            print(f"Found {f} pairs in range {idx*h} <= s < {(idx + 1) * h}")
+            logger.info(f"Found {f} pairs in range {idx*h} <= s < {(idx + 1) * h}")
             self.weights = np.append(self.weights, [1/f if f > 0. else 0.])
         f = self.identity_scale_factor * np.sum(np_scores == 1.)
-        print(f"Found {f} pairs for s == 1")
+        logger.info(f"Found {f} pairs for s == 1")
         self.weights = np.append(self.weights, [1/f if f > 0. else 0.])
 
     def get_weight(self, score):

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import os
 
 import numpy as np
@@ -19,6 +20,7 @@ from dataset.utils.tools import load_class_pairs_with_self_comparison, load_clas
 from networks.transformer_pst import TransformerPstEmbeddingCosine
 
 d_type = np.float32
+logger = logging.getLogger(__name__)
 
 
 class TmScoreFromCoordDataset(Dataset):
@@ -48,13 +50,13 @@ class TmScoreFromCoordDataset(Dataset):
         self.load_coords(embedding_path, ext)
 
     def load_class_pairs(self, tm_score_file):
-        print(f"Loading pairs from file {tm_score_file}")
+        logger.info(f"Loading pairs from file {tm_score_file}")
         self.class_pairs = load_class_pairs(tm_score_file) if isinstance(self.coords_augmenter, NullAugmenter) else \
                            load_class_pairs_with_self_comparison(tm_score_file)
-        print(f"Total pairs: {len(self.class_pairs)}")
+        logger.info(f"Total pairs: {len(self.class_pairs)}")
 
     def load_coords(self, coords_path, ext):
-        print(f"Loading coords from path {coords_path}")
+        logger.info(f"Loading coords from path {coords_path}")
         self.coords = pd.DataFrame(
             data=[
                 (lambda coords: (
@@ -71,7 +73,7 @@ class TmScoreFromCoordDataset(Dataset):
             ],
             columns=['domain', 'cas', 'seq']
         )
-        print(f"Total structures: {len(self.coords)}")
+        logger.info(f"Total structures: {len(self.coords)}")
 
     def weights(self):
         return self.weighting_method(self.class_pairs['score'].to_numpy())

@@ -1,24 +1,38 @@
-import os.path
-from collections import deque
+import logging
 
 import pandas as pd
 import lightning as L
-import torch
 from torch.utils.data import DataLoader
 
 from dataset.embeddings_dataset import EmbeddingsDataset
 from dataset.utils.tools import collate_seq_embeddings, load_class_pairs
+from scripts.populate_embeddings import populate_zero_embeddings
+
+logger = logging.getLogger(__name__)
 
 
 class ReloadValidationDataLoaderCallback(L.Callback):
 
-    def __init__(self):
-        self.validation_loader = None
+    def __init__(
+            self,
+            embedding_provider
+    ):
+        self.embedding_provider = embedding_provider
+
+    def on_fit_start(self, trainer, pl_module):
+        self.embedding_provider.build(
+            pl_module.cfg.validation_set.embedding_tmp_path,
+            str(pl_module.local_rank)
+        )
+        populate_zero_embeddings(
+            tm_score_file=pl_module.cfg.validation_set.tm_score_file,
+            dim=pl_module.cfg.network_parameters.hidden_layer,
+            embedding_provider=self.embedding_provider
+        )
 
     def on_validation_epoch_start(self, trainer, pl_module):
-        cfg = pl_module.cfg
-        class_pairs = load_class_pairs(cfg.validation_set.tm_score_file)
-        print("Generating validation embeddings")
+        logger.info(f"Generating validation embeddings from {pl_module.cfg.validation_set.tm_score_file}, device: {pl_module.device}, rank: {pl_module.local_rank}")
+        class_pairs = load_class_pairs(pl_module.cfg.validation_set.tm_score_file)
         dataset = EmbeddingsDataset(
             list(pd.concat([
                 class_pairs["domain_i"], class_pairs["domain_j"]
@@ -33,32 +47,21 @@ class ReloadValidationDataLoaderCallback(L.Callback):
                 tuple([z for x, z in emb])
             )
         )
-        compute_embeddings(
-            pl_module.model.embedding_pooling,
-            pl_module.device,
-            pl_module.cfg.validation_set.embedding_tmp_path,
-            dataloader
-        )
-        print(f"New validation embeddings available {pl_module.cfg.validation_set.embedding_tmp_path}")
+        for dom_id, embedding in compute_embeddings(
+                pl_module.model.embedding_pooling,
+                pl_module.device,
+                dataloader
+        ):
+            self.embedding_provider.update(dom_id, embedding.tolist())
+        logger.info(f"New validation embeddings available")
 
 
-def compute_embeddings(embedding_pooling, device, out_path, dataloader):
+def compute_embeddings(embedding_pooling, device, dataloader):
     for (x, x_mask), z in dataloader:
         x_pred = embedding_pooling(
             x.to(device),
             x_mask.to(device)
         )
-        indexes, embeddings = zip(*enumerate(x_pred))
-        deque(map(
-            save_embedding,
-            [e / torch.norm(e, p=2) for e in embeddings],
-            [os.path.join(out_path, f"{z[idx]}.pt") for idx in indexes]
-        ))
-
-
-def save_embedding(embedding, path):
-    torch.save(
-        embedding.to('cpu'),
-        path
-    )
+        for idx, embedding in enumerate(x_pred):
+            yield z[idx], embedding
 

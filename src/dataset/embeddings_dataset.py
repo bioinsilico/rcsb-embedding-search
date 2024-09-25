@@ -1,4 +1,5 @@
 import argparse
+import logging
 import os
 
 import torch
@@ -6,6 +7,8 @@ from torch.utils.data import Dataset, DataLoader
 import pandas as pd
 
 from dataset.utils.tools import collate_seq_embeddings
+
+logger = logging.getLogger(__name__)
 
 
 class EmbeddingsDataset(Dataset):
@@ -21,7 +24,7 @@ class EmbeddingsDataset(Dataset):
         self.load_embedding(embedding_list, embedding_path)
 
     def load_embedding(self, embedding_list, embedding_path):
-        print(f"Loading embeddings from path {embedding_path}")
+        logger.info(f"Loading embeddings from path {embedding_path}")
         self.embedding = pd.DataFrame(
             data=[
                 (dom_id, os.path.join(embedding_path, f"{dom_id}.pt"))
@@ -32,7 +35,7 @@ class EmbeddingsDataset(Dataset):
             ],
             columns=['dom_id', 'embedding'],
         )
-        print(f"Total embeddings: {len(self.embedding)}")
+        logger.info(f"Total embeddings: {len(self.embedding)}")
 
     def __len__(self):
         return len(self.embedding)
