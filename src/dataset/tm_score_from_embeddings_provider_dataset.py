@@ -70,9 +70,9 @@ if __name__ == '__main__':
 
     dataset = TmScoreFromEmbeddingsProviderDataset(
         args.tm_score_file,
-        SqliteEmbeddingProvider(db_name=args.embedding_db),
+        SqliteEmbeddingProvider(),
         score_method=fraction_score,
-        weighting_method=tm_score_weights(5)
+        weighting_method=tm_score_weights(5, 0.25)
     )
     weights = dataset.weights()
     sampler = CustomWeightedRandomSampler(

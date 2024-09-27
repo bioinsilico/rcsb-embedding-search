@@ -6,9 +6,9 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
-def tm_score_weights(n_intervals):
+def tm_score_weights(n_intervals, identity_scale_factor):
     def __tm_score_weights(np_scores):
-        class_weights = TmScoreWeight(np_scores, n_intervals)
+        class_weights = TmScoreWeight(np_scores, n_intervals, identity_scale_factor)
         return torch.tensor(
             np.vectorize(class_weights.get_weight)(np_scores)
         )

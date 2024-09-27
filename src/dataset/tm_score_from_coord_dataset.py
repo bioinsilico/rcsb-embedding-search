@@ -125,7 +125,7 @@ if __name__ == '__main__':
         args.tm_score_file,
         args.pdb_path,
         ext="pdb",
-        weighting_method=tm_score_weights(5),
+        weighting_method=tm_score_weights(5, 0.25),
         score_method=fraction_score,
         coords_augmenter=SelfAugmenterRandomFraction(
             fraction=0.1,

@@ -1,4 +1,5 @@
 import lightning as L
+import torch
 from omegaconf import OmegaConf
 from torch import nn, optim, cat
 from torcheval.metrics.functional import binary_auprc, binary_auroc
@@ -19,8 +20,8 @@ class LitStructureCore(L.LightningModule):
         self.model = nn_model
         self.learning_rate = learning_rate
         self.cfg = cfg
-        self.z = []
-        self.z_pred = []
+        self.z = torch.empty(1).to(self.device)
+        self.z_pred = torch.empty(1).to(self.device)
 
     def on_fit_start(self):
         if self.cfg is not None and hasattr(self.logger.experiment, 'add_text'):
@@ -40,8 +41,8 @@ class LitStructureCore(L.LightningModule):
         self.reset_z()
 
     def on_validation_epoch_end(self):
-        z = cat(self.z, dim=0)
-        z_pred = cat(self.z_pred, dim=0)
+        z = self.z
+        z_pred = self.z_pred
         pr_auc = binary_auprc(z_pred, z)
         self.log(self.PR_AUC_METRIC_NAME, pr_auc, sync_dist=True)
         if self.device.type == 'mps':
@@ -76,11 +77,11 @@ class LitStructureCore(L.LightningModule):
     def train_loss(self):
         if len(self.z) == 0:
             return
-        z = cat(self.z, dim=0)
-        z_pred = cat(self.z_pred, dim=0)
+        z = self.z
+        z_pred = self.z_pred
         loss = nn.functional.mse_loss(z_pred, z)
         self.log("train_loss", loss, sync_dist=True)
 
     def reset_z(self):
-        self.z = []
-        self.z_pred = []
+        self.z = torch.empty(1).to(self.device)
+        self.z_pred = torch.empty(1).to(self.device)
