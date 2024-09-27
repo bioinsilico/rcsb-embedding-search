@@ -30,15 +30,17 @@ class SqliteEmbeddingProvider(AbstractEmbeddingProvider):
 
     def __init__(self):
         """Initialize the database connection and create the table."""
+        self.collection_name = None
         self.cursor = None
         self.conn = None
         self.db_name = None
 
-    def build(self, root_folder, local_rank):
-        directory = os.path.join(root_folder, local_rank)
+    def build(self, root_folder, global_rank):
+        directory = os.path.join(root_folder, global_rank)
         if not os.path.exists(directory):
             os.makedirs(directory)
-        self.db_name = os.path.join(directory, "embeddings.sqlite")
+        self.db_name = self.db_name = os.path.join(directory, "embeddings.sqlite")
+        self.collection_name = f"embedding_{global_rank}"
         self.connect()
         self.create_table()
 
@@ -50,10 +52,10 @@ class SqliteEmbeddingProvider(AbstractEmbeddingProvider):
     def create_table(self):
         """Remove the collection table if it exists, then create a new one."""
         # Drop the table if it exists
-        self.cursor.execute('DROP TABLE IF EXISTS collection')
+        self.cursor.execute(f'DROP TABLE IF EXISTS {self.collection_name}')
         # Create a new table
-        self.cursor.execute('''
-            CREATE TABLE collection (
+        self.cursor.execute(f'''
+            CREATE TABLE {self.collection_name} (
                 id TEXT PRIMARY KEY,
                 numbers TEXT
             )
@@ -62,7 +64,7 @@ class SqliteEmbeddingProvider(AbstractEmbeddingProvider):
 
     def get(self, key):
         """Retrieve the list of numbers for a given key."""
-        self.cursor.execute('SELECT numbers FROM collection WHERE id = ?', (key,))
+        self.cursor.execute(f'SELECT numbers FROM {self.collection_name} WHERE id = ?', (key,))
         result = self.cursor.fetchone()
         if result:
             numbers_json = result[0]
@@ -74,8 +76,8 @@ class SqliteEmbeddingProvider(AbstractEmbeddingProvider):
     def set(self, key, numbers_list):
         """Set the list of numbers for a given key."""
         numbers_json = json.dumps(numbers_list)
-        self.cursor.execute('''
-            INSERT OR REPLACE INTO collection (id, numbers) VALUES (?, ?)
+        self.cursor.execute(f'''
+            INSERT OR REPLACE INTO {self.collection_name} (id, numbers) VALUES (?, ?)
         ''', (key, numbers_json))
         self.conn.commit()
 
@@ -88,7 +90,7 @@ class SqliteEmbeddingProvider(AbstractEmbeddingProvider):
 
     def delete(self, key):
         """Delete the entry for a given key."""
-        self.cursor.execute('DELETE FROM collection WHERE id = ?', (key,))
+        self.cursor.execute(f'DELETE FROM {self.collection_name} WHERE id = ?', (key,))
         self.conn.commit()
 
     def close(self):
