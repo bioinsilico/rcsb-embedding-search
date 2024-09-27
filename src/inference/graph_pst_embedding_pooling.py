@@ -25,7 +25,7 @@ def main(cfg: InferenceConfig):
     inference_dataloader = DataLoader(
         dataset=inference_set,
         batch_size=cfg.inference_set.batch_size,
-        num_workers=cfg.computing_resources.workers
+        num_workers=cfg.inference_set.workers
     )
 
     nn_model = instantiate(

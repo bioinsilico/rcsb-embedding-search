@@ -19,7 +19,7 @@ def main(cfg: TrainingConfig):
     inference_set = IdentityCoordsDataset(
         coords_list=cfg.training_set.tm_score_file,
         coords_path=cfg.training_set.data_path,
-        num_workers=cfg.computing_resources.workers,
+        num_workers=cfg.training_set.workers,
         ext="pdb",
         coords_augmenter=SelfAugmenterRandomFraction(0.1, 10)
     )
@@ -27,7 +27,7 @@ def main(cfg: TrainingConfig):
     inference_dataloader = DataLoader(
         dataset=inference_set,
         batch_size=cfg.training_set.batch_size,
-        num_workers=cfg.computing_resources.workers
+        num_workers=cfg.training_set.workers
     )
 
     nn_model = instantiate(

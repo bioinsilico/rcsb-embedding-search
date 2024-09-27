@@ -39,7 +39,7 @@ def main(cfg: TrainingConfig):
         ext=cfg.training_set.data_ext,
         score_method=fraction_score,
         weighting_method=tm_score_weights(5, 0.25),
-        num_workers=cfg.computing_resources.workers,
+        num_workers=cfg.training_set.workers,
         include_self_comparison=cfg.training_set.include_self_comparison,
         coords_augmenter=instantiate(
             cfg.training_set.data_augmenter
@@ -56,8 +56,8 @@ def main(cfg: TrainingConfig):
         dataset=training_set,
         sampler=sampler,
         batch_size=cfg.training_set.batch_size,
-        num_workers=cfg.computing_resources.workers,
-        persistent_workers=True if cfg.computing_resources.workers > 0 else False
+        num_workers=cfg.training_set.workers,
+        persistent_workers=True if cfg.training_set.workers > 0 else False
     )
 
     embedding_provider = SqliteEmbeddingProvider()
@@ -69,8 +69,8 @@ def main(cfg: TrainingConfig):
     validation_dataloader = DataLoader(
         dataset=validation_set,
         batch_size=cfg.validation_set.batch_size,
-        num_workers=cfg.computing_resources.workers,
-        persistent_workers=True if cfg.computing_resources.workers > 0 else False,
+        num_workers=cfg.validation_set.workers,
+        persistent_workers=True if cfg.validation_set.workers > 0 else False,
         collate_fn=lambda emb: (
             stack([x for x, y, z in emb], dim=0),
             stack([y for x, y, z in emb], dim=0),

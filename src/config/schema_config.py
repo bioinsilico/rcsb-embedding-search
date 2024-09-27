@@ -44,6 +44,7 @@ class EmbeddingDataset:
     embedding_source: Path = MISSING
     embedding_path: Path = MISSING
     batch_size: int = MISSING
+    workers: Optional[int] = 0
 
 
 @dataclass
@@ -53,6 +54,7 @@ class TMScoreDataset:
     data_ext: Optional[DataExtension]
     batch_size: int = MISSING
     embedding_tmp_path: Optional[Path]
+    workers: Optional[int] = 0
     data_augmenter: Optional[Any] = None
     include_self_comparison: Optional[bool] = False
 
@@ -72,7 +74,6 @@ class TrainingParameters:
 @dataclass
 class ComputingResources:
     devices: int = MISSING
-    workers: int = MISSING
     strategy: Strategy = MISSING
     nodes: int = 1
 

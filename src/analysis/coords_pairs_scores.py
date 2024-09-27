@@ -5,7 +5,6 @@ from hydra.utils import instantiate
 from torch_geometric.data import DataLoader
 
 from dataset.tm_score_from_coord_dataset import TmScoreFromCoordDataset
-from dataset.utils.coords_augmenter import SelfAugmenterRandomFraction
 from config.schema_config import TrainingConfig
 from lightning_module.analysis.lightning_pst_embedding_cosine import LitStructurePstEmbeddingScore
 
@@ -19,14 +18,14 @@ def main(cfg: TrainingConfig):
     inference_set = TmScoreFromCoordDataset(
         tm_score_file=cfg.training_set.tm_score_file,
         coords_path=cfg.training_set.data_path,
-        num_workers=cfg.computing_resources.workers,
+        num_workers=cfg.training_set.workers,
         ext="cif"
     )
 
     inference_dataloader = DataLoader(
         dataset=inference_set,
         batch_size=cfg.training_set.batch_size,
-        num_workers=cfg.computing_resources.workers
+        num_workers=cfg.training_set.workers
     )
 
     nn_model = instantiate(
