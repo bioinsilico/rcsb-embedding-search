@@ -101,6 +101,7 @@ class DataExtension(str, Enum):
     ent = "ent"
     mmcif = "mmcif"
     bcif = "bcif"
+    pt = "pt"
     none = ""
 
 
