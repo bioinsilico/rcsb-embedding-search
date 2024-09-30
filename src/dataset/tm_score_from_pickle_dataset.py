@@ -12,7 +12,7 @@ from dataset.utils.coords_augmenter import SelfAugmenterRandomFraction
 from dataset.utils.custom_weighted_random_sampler import CustomWeightedRandomSampler
 from dataset.utils.tm_score_weight import fraction_score, tm_score_weights
 from networks.transformer_pst import TransformerPstEmbeddingCosine
-from tm_score_from_coord_dataset import TmScoreFromCoordDataset as Dataset
+from dataset.tm_score_from_coord_dataset import TmScoreFromCoordDataset as Dataset
 
 d_type = np.float32
 logger = logging.getLogger(__name__)

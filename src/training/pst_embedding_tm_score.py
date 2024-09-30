@@ -14,8 +14,8 @@ from torch import stack
 from torch_geometric.loader import DataLoader as GraphDataLoader
 
 from callbacks.validation_reload import ReloadValidationDataLoaderCallback
-from dataset.tm_score_from_coord_dataset import TmScoreFromCoordDataset
 from dataset.tm_score_from_embeddings_provider_dataset import TmScoreFromEmbeddingsProviderDataset
+from dataset.tm_score_from_pickle_dataset import TmScoreFromCoordDataset
 from dataset.utils.custom_weighted_random_sampler import CustomWeightedRandomSampler
 from dataset.utils.embedding_provider import SqliteEmbeddingProvider
 from dataset.utils.tm_score_weight import fraction_score, tm_score_weights
