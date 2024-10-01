@@ -83,5 +83,5 @@ class LitStructureCore(L.LightningModule):
         self.log("train_loss", loss, sync_dist=True)
 
     def reset_z(self):
-        self.z = torch.empty(1).to(self.device)
-        self.z_pred = torch.empty(1).to(self.device)
+        self.z = torch.empty(0).to(self.device)
+        self.z_pred = torch.empty(0).to(self.device)
