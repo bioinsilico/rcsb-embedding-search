@@ -9,6 +9,9 @@ from src.lightning_module.utils import get_cosine_schedule_with_warmup
 
 class LitStructureCore(L.LightningModule):
     PR_AUC_METRIC_NAME = 'pr_auc'
+    ROC_AUC_METRIC_NAME = 'roc_auc'
+    TRAIN_LOSS_METRIC_NAME = 'train_loss'
+    VALIDATION_LOSS_METRIC_NAME = 'validation_loss'
 
     def __init__(
             self,
@@ -20,25 +23,23 @@ class LitStructureCore(L.LightningModule):
         self.model = nn_model
         self.learning_rate = learning_rate
         self.cfg = cfg
-        self.z = torch.empty(1).to(self.device)
-        self.z_pred = torch.empty(1).to(self.device)
+        self.z = None
+        self.z_pred = None
 
     def on_fit_start(self):
+        self.z = torch.empty(0).to(self.device)
+        self.z_pred = torch.empty(0).to(self.device)
         if self.cfg is not None and hasattr(self.logger.experiment, 'add_text'):
             self.logger.experiment.add_text(
                 "Config",
                 OmegaConf.to_yaml(self.cfg)
             )
 
-    def on_train_epoch_start(self):
-        self.reset_z()
-
     def on_train_epoch_end(self):
-        self.train_loss()
+        self.log_loss(self.TRAIN_LOSS_METRIC_NAME)
 
     def on_validation_epoch_start(self):
-        self.train_loss()
-        self.reset_z()
+        self.log_loss(self.TRAIN_LOSS_METRIC_NAME)
 
     def on_validation_epoch_end(self):
         z = self.z
@@ -49,10 +50,8 @@ class LitStructureCore(L.LightningModule):
             roc_auc = binary_auroc(z_pred.to('cpu'), z.to('cpu'))
         else:
             roc_auc = binary_auroc(z_pred, z)
-        self.log("roc_auc", roc_auc, sync_dist=True)
-        loss = nn.functional.mse_loss(z_pred, z)
-        self.log("validation_loss", loss, sync_dist=True)
-        self.reset_z()
+        self.log(self.ROC_AUC_METRIC_NAME, roc_auc, sync_dist=True)
+        self.log_loss(self.VALIDATION_LOSS_METRIC_NAME)
 
     def configure_optimizers(self):
         optimizer = optim.AdamW(
@@ -74,13 +73,14 @@ class LitStructureCore(L.LightningModule):
             }
         }
 
-    def train_loss(self):
+    def log_loss(self, step):
         if len(self.z) == 0:
             return
         z = self.z
         z_pred = self.z_pred
         loss = nn.functional.mse_loss(z_pred, z)
-        self.log("train_loss", loss, sync_dist=True)
+        self.log(step, loss, sync_dist=True)
+        self.reset_z()
 
     def reset_z(self):
         self.z = torch.empty(0).to(self.device)
