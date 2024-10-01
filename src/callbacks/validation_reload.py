@@ -42,6 +42,7 @@ class ReloadValidationDataLoaderCallback(L.Callback):
         )
 
     def on_validation_epoch_start(self, trainer, pl_module):
+        logger.info(f"#new line#")
         logger.info(f"Generating validation embeddings from {self.source}, device: {self.device}, rank: {self.rank}")
         dataset = EmbeddingsDataset(
             get_unique_pairs(self.source),
