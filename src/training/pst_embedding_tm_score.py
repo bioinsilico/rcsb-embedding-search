@@ -57,7 +57,8 @@ def main(cfg: TrainingConfig):
         sampler=sampler,
         batch_size=cfg.training_set.batch_size,
         num_workers=cfg.training_set.workers,
-        persistent_workers=True if cfg.training_set.workers > 0 else False
+        persistent_workers=True if cfg.training_set.workers > 0 else False,
+        pin_memory=True
     )
 
     embedding_provider = SqliteEmbeddingProvider()
