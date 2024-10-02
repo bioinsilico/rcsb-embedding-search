@@ -51,6 +51,7 @@ class ReloadValidationDataLoaderCallback(L.Callback):
         dataloader = DataLoader(
             dataset,
             batch_size=pl_module.cfg.validation_set.batch_size,
+            num_workers=pl_module.cfg.validation_set.workers,
             collate_fn=lambda emb: (
                 collate_seq_embeddings([x for x, z in emb]),
                 tuple([z for x, z in emb])
