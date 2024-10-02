@@ -56,14 +56,15 @@ class ReloadValidationDataLoaderCallback(L.Callback):
                 tuple([z for x, z in emb])
             )
         )
-        logger.info(f"Generating validation embeddings from {self.source}, device: {self.device}, rank: {self.rank}")
         with torch.no_grad():
+            logger.info(f"Generating validation embeddings from {self.source}, device: {self.device}, rank: {self.rank}")
             pl_module.model.eval()
             z, x_pred = compute_embeddings(
                     pl_module.model.embedding_pooling,
                     self.device,
                     dataloader
             )
+            logger.info(f"Updating validation embeddings from {self.source}, device: {self.device}, rank: {self.rank}")
             self.embedding_provider.set_many([(z[idx], embedding.tolist()) for idx, embedding in enumerate(x_pred)])
         pl_module.model.train()
         logger.info(f"New validation embeddings available from {self.source}, device: {self.device}, rank: {self.rank}")
