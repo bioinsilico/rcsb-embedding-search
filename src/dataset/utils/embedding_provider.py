@@ -22,6 +22,10 @@ class AbstractEmbeddingProvider(ABC):
         pass
 
     @abstractmethod
+    def set_many(self, list_of_tuples):
+        pass
+
+    @abstractmethod
     def update(self, key, new_numbers):
         pass
 
@@ -81,6 +85,14 @@ class SqliteEmbeddingProvider(AbstractEmbeddingProvider):
         ''', (key, numbers_json))
         self.conn.commit()
 
+    def set_many(self, data_list):
+        self.cursor.executemany(f'''
+            INSERT OR REPLACE INTO {self.collection_name} (id, numbers) VALUES (?, ?)
+        ''', [
+            (key, json.dumps(numbers_list)) for key, numbers_list in data_list
+        ])
+        self.conn.commit()
+
     def update(self, key, new_numbers):
         """Replace the existing list of numbers with a new list."""
         if self.get(key) is not None:
@@ -122,6 +134,10 @@ class DiskEmbeddingProvider(AbstractEmbeddingProvider):
             header=False,
             index=False
         )
+
+    def set_many(self, data_list):
+        for key, value in data_list:
+            self.set(key, value)
 
     def update(self, key, new_numbers):
         self.set(key, new_numbers)

@@ -4,7 +4,6 @@ import signal
 import hydra
 import lightning as L
 from hydra.core.config_store import ConfigStore
-from hydra.core.hydra_config import HydraConfig
 from hydra.utils import instantiate
 from lightning import seed_everything
 from lightning.pytorch.plugins.environments import SLURMEnvironment
@@ -14,6 +13,7 @@ from torch import stack
 from torch_geometric.loader import DataLoader as GraphDataLoader
 
 from callbacks.validation_reload import ReloadValidationDataLoaderCallback
+from config.utils import get_config_path
 from dataset.tm_score_from_embeddings_provider_dataset import TmScoreFromEmbeddingsProviderDataset
 from dataset.tm_score_from_pickle_dataset import TmScoreFromCoordDataset
 from dataset.utils.custom_weighted_random_sampler import CustomWeightedRandomSampler
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 @hydra.main(version_base=None, config_path="../../config", config_name="training_config")
 def main(cfg: TrainingConfig):
-    logger.info(f"Using config file: {HydraConfig.get().job.config_name}")
+    logger.info(f"Using config file: {get_config_path()}")
     seed_everything(cfg.global_seed, workers=True)
     training_set = TmScoreFromCoordDataset(
         tm_score_file=cfg.training_set.tm_score_file,

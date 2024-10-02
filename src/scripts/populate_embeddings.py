@@ -12,5 +12,4 @@ def populate_zero_embeddings(
         dim,
         embedding_provider
 ):
-    for dom_id in get_unique_pairs(tm_score_file):
-        embedding_provider.set(dom_id, torch.zeros(dim).tolist())
+    embedding_provider.set_many([(dom_id, torch.zeros(dim).tolist()) for dom_id in get_unique_pairs(tm_score_file)])

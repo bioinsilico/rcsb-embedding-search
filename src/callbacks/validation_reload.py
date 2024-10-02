@@ -1,6 +1,7 @@
 import logging
 
 import lightning as L
+import torch
 from torch.utils.data import DataLoader
 
 from dataset.embeddings_dataset import EmbeddingsDataset
@@ -43,7 +44,6 @@ class ReloadValidationDataLoaderCallback(L.Callback):
 
     def on_validation_epoch_start(self, trainer, pl_module):
         logger.info(f"#new line#")
-        logger.info(f"Generating validation embeddings from {self.source}, device: {self.device}, rank: {self.rank}")
         dataset = EmbeddingsDataset(
             get_unique_pairs(self.source),
             pl_module.cfg.validation_set.data_path
@@ -56,21 +56,23 @@ class ReloadValidationDataLoaderCallback(L.Callback):
                 tuple([z for x, z in emb])
             )
         )
-        for dom_id, embedding in compute_embeddings(
-                pl_module.model.embedding_pooling,
-                self.device,
-                dataloader
-        ):
-            self.embedding_provider.update(dom_id, embedding.tolist())
+        logger.info(f"Generating validation embeddings from {self.source}, device: {self.device}, rank: {self.rank}")
+        with torch.no_grad():
+            pl_module.model.eval()
+            z, x_pred = compute_embeddings(
+                    pl_module.model.embedding_pooling,
+                    self.device,
+                    dataloader
+            )
+            self.embedding_provider.set_many([(z[idx], embedding.tolist()) for idx, embedding in enumerate(x_pred)])
+        pl_module.model.train()
         logger.info(f"New validation embeddings available from {self.source}, device: {self.device}, rank: {self.rank}")
 
 
 def compute_embeddings(embedding_pooling, device, dataloader):
-    for (x, x_mask), z in dataloader:
-        x_pred = embedding_pooling(
-            x.to(device),
-            x_mask.to(device)
-        )
-        for idx, embedding in enumerate(x_pred):
-            yield z[idx], embedding
+    predictions = [(z, embedding_pooling(x.to(device), x_mask.to(device))) for (x, x_mask), z in dataloader]
+    return (
+        [s for strings, _ in predictions for s in strings],
+        torch.cat([embedding for _, embedding in predictions], dim=0)
+    )
 
