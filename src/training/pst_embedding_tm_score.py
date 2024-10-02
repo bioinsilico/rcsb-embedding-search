@@ -71,6 +71,7 @@ def main(cfg: TrainingConfig):
         batch_size=cfg.validation_set.batch_size,
         num_workers=cfg.validation_set.workers,
         persistent_workers=True if cfg.validation_set.workers > 0 else False,
+        pin_memory=True,
         collate_fn=lambda emb: (
             stack([x for x, y, z in emb], dim=0),
             stack([y for x, y, z in emb], dim=0),
