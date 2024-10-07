@@ -81,13 +81,17 @@ class UniMP(nn.Module):
 class ResBlock(nn.Module):
     def __init__(self, in_dim, out_dim, dropout=0.1):
         super().__init__()
-        self.residual = nn.Identity()
+        if in_dim != out_dim:
+            self.residual = nn.Linear(in_dim, out_dim)
+        else:
+            self.residual = nn.Identity()
+
         self.block = nn.Sequential(
             nn.LayerNorm(in_dim),
             nn.Dropout(p=dropout),
             nn.Linear(in_dim, out_dim),
             nn.ReLU(),
-            nn.LayerNorm(in_dim),
+            nn.LayerNorm(out_dim),
             nn.Dropout(p=dropout),
             nn.Linear(out_dim, out_dim),
         )
