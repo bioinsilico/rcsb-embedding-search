@@ -51,7 +51,7 @@ class TransformerPstEmbeddingCosine(nn.Module):
             ) for i in range(res_block_layers)])
             res_block.update([
                 ('dropout', nn.Dropout(p=self.dropout)),
-                ('linear', nn.Linear(input_features, hidden_layer)),
+                ('linear', nn.Linear(hidden_layer, hidden_layer)),
                 ('activation', nn.ReLU())
             ])
             self.embedding = nn.Sequential(res_block)
