@@ -163,6 +163,12 @@ class TransformerPstMultiBranchEmbeddingCosine(nn.Module):
             dim=1
         ))
 
+    def validation_forward(self, x, x_mask, y, y_mask):
+        return nn.functional.cosine_similarity(
+            self.embedding_pooling(x, x_mask),
+            self.embedding_pooling(y, y_mask)
+        )
+
     def forward(self, g_i, g_j):
         x_batch, x_mask = self.graph_transformer_forward(g_i)
         y_batch, y_mask = self.graph_transformer_forward(g_j)
