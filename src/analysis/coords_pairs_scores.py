@@ -9,7 +9,7 @@ from config.schema_config import TrainingConfig
 from lightning_module.analysis.lightning_pst_embedding_cosine import LitStructurePstEmbeddingScore
 
 cs = ConfigStore.instance()
-cs.store(name="training_default", node=TrainingConfig)
+cs.store(name="analysis_default", node=TrainingConfig)
 
 
 @hydra.main(version_base=None, config_path="../../config", config_name="identity_analysis_config")
@@ -42,6 +42,7 @@ def main(cfg: TrainingConfig):
         callbacks=[],
         devices=cfg.computing_resources.devices
     )
+
     trainer.predict(
         model,
         inference_dataloader

@@ -1,4 +1,5 @@
 import hydra
+from hydra._internal.instantiate._instantiate2 import instantiate
 from hydra.core.config_store import ConfigStore
 import lightning as L
 
@@ -9,7 +10,7 @@ from lightning_module.analysis.lightning_pst_embedding_cosine import LitStructur
 from config.schema_config import InferenceConfig
 
 cs = ConfigStore.instance()
-cs.store(name="inference_default", node=InferenceConfig)
+cs.store(name="analysis_default", node=InferenceConfig)
 
 
 @hydra.main(version_base=None, config_path="../../config", config_name="inference_config")
@@ -27,7 +28,16 @@ def main(cfg: InferenceConfig):
         collate_fn=collate
     )
 
-    model = LitStructurePstEmbeddingCosine()
+    nn_model = instantiate(
+        cfg.embedding_network
+    )
+
+    model = LitStructurePstEmbeddingCosine.load_from_checkpoint(
+        cfg.checkpoint,
+        nn_model=nn_model,
+        params=cfg
+    )
+
     trainer = L.Trainer(
         callbacks=[],
         devices=cfg.computing_resources.devices

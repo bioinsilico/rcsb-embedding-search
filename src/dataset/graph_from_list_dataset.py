@@ -1,10 +1,14 @@
 import argparse
+import logging
 import os
 
 import pandas as pd
 import torch
 from torch_geometric.data import Dataset
 from torch_geometric.loader import DataLoader
+
+
+logger = logging.getLogger(__name__)
 
 
 class GraphFromListDataset(Dataset):
@@ -20,6 +24,7 @@ class GraphFromListDataset(Dataset):
         self.load_coords(graph_list, graph_path, output_path, postfix)
 
     def load_coords(self, graph_list, graph_path, output_path, postfix):
+        logger.info(f"Loading graphs from file {graph_list} not present in path {output_path}")
         self.graphs = pd.DataFrame(
             data=[
                 (
@@ -30,7 +35,7 @@ class GraphFromListDataset(Dataset):
             ],
             columns=['graph_id', 'graph_file']
         )
-        print(f"Total graphs: {len(self.graphs)}")
+        logger.info(f"Total graphs: {len(self.graphs)}")
 
     def len(self):
         return len(self.graphs)

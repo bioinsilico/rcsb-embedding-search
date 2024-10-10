@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, MISSING
+from dataclasses import dataclass, MISSING, field
 from enum import Enum
 from pathlib import Path
 from typing import Optional, Any
@@ -41,6 +41,7 @@ class NetworkParams:
 
 @dataclass
 class EmbeddingDataset:
+    root: Path = MISSING
     embedding_source: Path = MISSING
     embedding_path: Path = MISSING
     batch_size: int = MISSING
@@ -49,14 +50,15 @@ class EmbeddingDataset:
 
 @dataclass
 class TMScoreDataset:
+    root: Path = MISSING
     tm_score_file: Path = MISSING
     data_path: Path = MISSING
     data_ext: Optional[DataExtension]
     batch_size: int = MISSING
     embedding_tmp_path: Optional[Path]
     workers: Optional[int] = 0
-    data_augmenter: Optional[Any] = None
-    include_self_comparison: Optional[bool] = False
+    data_augmenter: Any = None
+    include_self_comparison: bool = False
 
 
 @dataclass
@@ -99,7 +101,7 @@ class Strategy(str, Enum):
 class DataExtension(str, Enum):
     pdb = "pdb"
     ent = "ent"
-    mmcif = "mmcif"
+    cif = "cif"
     bcif = "bcif"
     pt = "pt"
     gz = "gz"

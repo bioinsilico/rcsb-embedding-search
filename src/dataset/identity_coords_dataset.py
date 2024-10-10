@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 
 from torch_geometric.data import Dataset
@@ -8,6 +9,9 @@ import pandas as pd
 from dataset.utils.biopython_getter import get_coords_from_pdb_file, get_coords_from_cif_file
 from dataset.utils.coords_augmenter import AbstractAugmenter, NullAugmenter
 from dataset.utils.embedding_builder import graph_builder
+
+
+logger = logging.getLogger(__name__)
 
 
 class IdentityCoordsDataset(Dataset):
@@ -30,7 +34,7 @@ class IdentityCoordsDataset(Dataset):
         self.load_coords(embedding_list, embedding_path, ext)
 
     def load_coords(self, coords_list, coords_path, ext):
-        print(f"Loading coords from path {coords_path}")
+        logger.info(f"Loading structures from file {coords_list} in path {coords_path}")
         self.coords = pd.DataFrame(
             data=[
                 (lambda coords: (
@@ -41,11 +45,11 @@ class IdentityCoordsDataset(Dataset):
                     get_coords_from_pdb_file(os.path.join(coords_path, f"{row[0]}.{ext}")) if ext == "pdb" or ext == "ent" else
                     get_coords_from_cif_file(os.path.join(coords_path, f"{row[0]}.{ext}"))
                 )
-                for row in [row.strip().split("\t") for row in open(coords_list)]
+                for row in [row.strip().split(",") for row in open(coords_list)]
             ],
             columns=['domain', 'cas', 'seq']
         )
-        print(f"Total structures: {len(self.coords)}")
+        logger.info(f"Total structures: {len(self.coords)}")
 
     def __build_graph(self, idx, add_change=lambda *abc: abc):
         coords_i = self.coords.loc[idx]
