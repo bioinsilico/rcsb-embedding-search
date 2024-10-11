@@ -16,6 +16,7 @@ from torch_geometric.loader import DataLoader as GraphDataLoader
 from config.utils import get_config_path
 from dataset.tm_score_from_embeddings_dataset import TmScoreFromEmbeddingsDataset
 from dataset.tm_score_from_pickle_dataset import TmScoreFromCoordDataset
+from dataset.utils.coords_augmenter import AugmenterComposer
 from dataset.utils.custom_weighted_random_sampler import CustomWeightedRandomSampler
 from dataset.utils.tm_score_weight import fraction_score, tm_score_weights
 from dataset.utils.tools import collate_fn
@@ -41,9 +42,9 @@ def main(cfg: TrainingConfig):
         weighting_method=tm_score_weights(5, 0.25),
         num_workers=cfg.training_set.workers,
         include_self_comparison=cfg.training_set.include_self_comparison,
-        coords_augmenter=instantiate(
+        coords_augmenter=AugmenterComposer(instantiate(
             cfg.training_set.data_augmenter
-        ) if cfg.training_set.data_augmenter is not None else None
+        )) if cfg.training_set.data_augmenter is not None else None
     )
 
     weights = training_set.weights()

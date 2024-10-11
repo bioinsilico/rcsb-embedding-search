@@ -50,16 +50,26 @@ class SegmentPermutationAugmenter(AbstractAugmenter):
         return lambda *x: x
 
 
+class AugmenterComposer(AbstractAugmenter):
+    def __init__(self, augmenters):
+        self.augmenters = augmenters
+
+    def add_change(self, dom_i, dom_j, dom_op):
+        def __composer(*x):
+            for augmenter in self.augmenters:
+                x = augmenter.add_change(dom_i, dom_j, dom_op)(*x)
+            return x
+        return __composer
+
+
 def _remove_random_fraction_residues(fraction, max_remove):
     def __remove_random_fraction_from_multiple_lists(*lists):
         result = [lst.copy() for lst in lists]
         if not result:
             raise ValueError("At least one list must be provided")
         list_lengths = [len(lst) for lst in result]
-        n_remove = math.floor(fraction * list_lengths[0])
-        if n_remove == 0:
-            return result
-        n_remove = random.randrange(1, min(n_remove, max_remove) + 1)
+        _remove = math.floor(fraction * list_lengths[0])
+        n_remove = random.randrange(1, min(_remove, max_remove) + 1)
         indices_to_remove = random.sample(range(list_lengths[0]), n_remove)
         for lst in result:
             for index in sorted(indices_to_remove, reverse=True):
@@ -111,4 +121,4 @@ def _permute_regions_lists(lst_of_lists, n):
         permuted_regions = [regions[i] for i in region_indices]
         permuted_list = [elem for region in permuted_regions for elem in region]
         result.append(permuted_list)
-    return result
+    return tuple(result)
