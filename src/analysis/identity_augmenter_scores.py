@@ -1,9 +1,12 @@
+import logging
+
 import hydra
 from hydra.core.config_store import ConfigStore
 import lightning as L
 from hydra.utils import instantiate
-from torch_geometric.data import DataLoader
+from torch_geometric.loader import DataLoader
 
+from config.utils import get_config_path
 from dataset.identity_coords_dataset import IdentityCoordsDataset
 from dataset.utils.coords_augmenter import SelfAugmenterRandomFraction
 from config.schema_config import TrainingConfig
@@ -11,10 +14,13 @@ from lightning_module.analysis.lightning_pst_embedding_cosine import LitStructur
 
 cs = ConfigStore.instance()
 cs.store(name="analysis_default", node=TrainingConfig)
+logger = logging.getLogger(__name__)
 
 
 @hydra.main(version_base=None, config_path="../../config", config_name="identity_analysis_config")
 def main(cfg: TrainingConfig):
+
+    logger.info(f"Using config file: {get_config_path()}")
 
     inference_set = IdentityCoordsDataset(
         coords_list=cfg.training_set.tm_score_file,

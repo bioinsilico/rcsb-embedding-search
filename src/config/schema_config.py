@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, MISSING, field
+from dataclasses import dataclass, MISSING
 from enum import Enum
 from pathlib import Path
 from typing import Optional, Any
@@ -8,6 +8,7 @@ from typing import Optional, Any
 
 @dataclass
 class TrainingConfig:
+    local_folder: LocalFolder = MISSING
     computing_resources: ComputingResources = MISSING
     global_seed: int = MISSING
     checkpoint: Optional[str]
@@ -41,7 +42,7 @@ class NetworkParams:
 
 @dataclass
 class EmbeddingDataset:
-    root: Path = MISSING
+    local_folder: LocalFolder = MISSING
     embedding_source: Path = MISSING
     embedding_path: Path = MISSING
     batch_size: int = MISSING
@@ -50,7 +51,7 @@ class EmbeddingDataset:
 
 @dataclass
 class TMScoreDataset:
-    root: Path = MISSING
+    local_folder: LocalFolder = MISSING
     tm_score_file: Path = MISSING
     data_path: Path = MISSING
     data_ext: Optional[DataExtension]
@@ -86,6 +87,13 @@ class InferenceWriter:
     output_path: Path
     postfix: str
     write_interval: WriteInterval
+
+
+@dataclass
+class LocalFolder:
+    data: Path = MISSING
+    pst_model: Path = MISSING
+    trained_model: Path = MISSING
 
 
 class LrInterval(str, Enum):
