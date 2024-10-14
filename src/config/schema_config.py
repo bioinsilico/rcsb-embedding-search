@@ -23,6 +23,7 @@ class TrainingConfig:
 
 @dataclass
 class InferenceConfig:
+    local_folder: LocalFolder = MISSING
     computing_resources: ComputingResources = MISSING
     checkpoint: str = MISSING
     network_parameters: NetworkParams = MISSING
@@ -60,6 +61,7 @@ class TMScoreDataset:
     workers: Optional[int] = 0
     data_augmenter: Any = None
     include_self_comparison: bool = False
+    fraction_score: Optional[int] = 10
 
 
 @dataclass

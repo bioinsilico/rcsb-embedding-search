@@ -1,8 +1,8 @@
 from abc import abstractmethod
 from collections import deque
 from abc import ABC
-import polars as pl
 import torch
+import pandas as pd
 
 from lightning.pytorch.callbacks import BasePredictionWriter
 
@@ -53,9 +53,10 @@ class CsvBatchWriter(CoreBatchWriter, ABC):
         super().__init__(output_path, postfix, write_interval)
 
     def _write_embedding(self, embedding, dom_id):
-        pl.DataFrame(embedding.to('cpu').numpy()).write_csv(
+        pd.DataFrame(embedding.to('cpu').numpy()).to_csv(
             self.file_name(dom_id),
-            include_header=False,
+            index=False,
+            header=False
         )
 
 

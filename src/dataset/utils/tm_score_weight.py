@@ -18,6 +18,7 @@ def tm_score_weights(n_intervals, identity_scale_factor):
 def binary_score(thr):
     def __binary_score(score):
         return 1. if score > thr else 0.
+
     return __binary_score
 
 
@@ -28,11 +29,18 @@ def binary_weights(thr):
         return torch.tensor(
             np.vectorize(lambda s: p if s >= thr else n)(np_scores)
         )
+
     return __binary_weights
 
 
 def fraction_score(score):
     return round(10 * score) / 10
+
+
+def fraction_score_of(f=10):
+    def __fraction_score(score):
+        return round(f * score) / f
+    return __fraction_score
 
 
 class TmScoreWeight:
@@ -51,12 +59,12 @@ class TmScoreWeight:
     def __compute(self, np_scores):
         h = 1 / self.n_intervals
         for idx in range(self.n_intervals):
-            f = np.sum((np_scores >= idx*h) & (np_scores < (idx+1)*h))
-            logger.info(f"Found {f} pairs in range {idx*h} <= s < {(idx + 1) * h}")
-            self.weights = np.append(self.weights, [1/f if f > 0. else 0.])
+            f = np.sum((np_scores >= idx * h) & (np_scores < (idx + 1) * h))
+            logger.info(f"Found {f} pairs in range {idx * h} <= s < {(idx + 1) * h}")
+            self.weights = np.append(self.weights, [1 / f if f > 0. else 0.])
         f = self.identity_scale_factor * np.sum(np_scores == 1.)
         logger.info(f"Found {f} pairs for s == 1")
-        self.weights = np.append(self.weights, [1/f if f > 0. else 0.])
+        self.weights = np.append(self.weights, [1 / f if f > 0. else 0.])
 
     def get_weight(self, score):
         idx = math.floor(score * self.n_intervals)

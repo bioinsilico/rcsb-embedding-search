@@ -18,7 +18,7 @@ from dataset.tm_score_from_embeddings_dataset import TmScoreFromEmbeddingsDatase
 from dataset.tm_score_from_pickle_dataset import TmScoreFromCoordDataset
 from dataset.utils.coords_augmenter import AugmenterComposer
 from dataset.utils.custom_weighted_random_sampler import CustomWeightedRandomSampler
-from dataset.utils.tm_score_weight import fraction_score, tm_score_weights
+from dataset.utils.tm_score_weight import fraction_score_of, tm_score_weights
 from dataset.utils.tools import collate_fn
 
 from lightning_module.training.lightning_pst_graph import LitStructurePstGraph
@@ -38,7 +38,7 @@ def main(cfg: TrainingConfig):
         tm_score_file=cfg.training_set.tm_score_file,
         coords_path=cfg.training_set.data_path,
         ext=cfg.training_set.data_ext,
-        score_method=fraction_score,
+        score_method=fraction_score_of(cfg.training_set.fraction_score),
         weighting_method=tm_score_weights(5, 0.25),
         num_workers=cfg.training_set.workers,
         include_self_comparison=cfg.training_set.include_self_comparison,
