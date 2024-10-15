@@ -69,7 +69,7 @@ def _remove_random_fraction_residues(fraction, max_remove):
             raise ValueError("At least one list must be provided")
         list_lengths = [len(lst) for lst in result]
         _remove = math.floor(fraction * list_lengths[0])
-        n_remove = random.randrange(1, min(_remove, max_remove) + 1)
+        n_remove = random.randrange(1, max(min(_remove, max_remove), 1) + 1)
         indices_to_remove = random.sample(range(list_lengths[0]), n_remove)
         for lst in result:
             for index in sorted(indices_to_remove, reverse=True):
