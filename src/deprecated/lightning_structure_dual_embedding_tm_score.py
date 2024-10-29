@@ -7,7 +7,7 @@ from lightning.pytorch.profilers import PyTorchProfiler
 
 from torch.utils.data import DataLoader
 
-from dataset.tm_dual_score_polars_dataset import TmDualScorePolarsDataset
+from deprecated.dataset.tm_dual_score_polars_dataset import TmDualScorePolarsDataset
 from dataset.tm_score_from_embeddings_dataset import TmScoreFromEmbeddingsDataset
 from dataset.utils.custom_weighted_random_sampler import CustomWeightedRandomSampler
 from dataset.utils.tm_score_weight import fraction_score, tm_score_weights
