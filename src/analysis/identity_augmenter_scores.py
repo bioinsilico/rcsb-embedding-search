@@ -8,7 +8,6 @@ from torch_geometric.loader import DataLoader
 
 from config.utils import get_config_path
 from dataset.identity_coords_dataset import IdentityCoordsDataset
-from dataset.utils.coords_augmenter import SelfAugmenterRandomFraction
 from config.schema_config import TrainingConfig
 from lightning_module.analysis.lightning_pst_embedding_cosine import LitStructurePstEmbeddingScore
 
@@ -26,8 +25,7 @@ def main(cfg: TrainingConfig):
         coords_list=cfg.training_set.tm_score_file,
         coords_path=cfg.training_set.data_path,
         num_workers=cfg.training_set.workers,
-        ext=cfg.training_set.data_ext,
-        coords_augmenter=SelfAugmenterRandomFraction(0.1, 10)
+        ext=cfg.training_set.data_ext
     )
 
     inference_dataloader = DataLoader(
