@@ -169,6 +169,25 @@ class TransformerPstMultiBranchEmbeddingCosine(nn.Module):
             self.embedding_pooling(y, y_mask)
         )
 
+    def forward_graph_ch_list(self, g_i, g_j):
+        x_batch = []
+        x_mask = []
+        for g in g_i:
+            batch, mask = self.graph_transformer_forward(g)
+            x_batch.append(batch)
+            x_mask.append(mask)
+        y_batch = []
+        y_mask = []
+        for g in g_j:
+            batch, mask = self.graph_transformer_forward(g)
+            y_batch.append(batch)
+            y_mask.append(mask)
+
+        return nn.functional.cosine_similarity(
+            self.embedding_pooling(cat(x_batch, dim=1), cat(x_mask, dim=1)),
+            self.embedding_pooling(cat(y_batch, dim=1), cat(y_mask, dim=1))
+        )
+
     def forward(self, g_i, g_j):
         x_batch, x_mask = self.graph_transformer_forward(g_i)
         y_batch, y_mask = self.graph_transformer_forward(g_j)

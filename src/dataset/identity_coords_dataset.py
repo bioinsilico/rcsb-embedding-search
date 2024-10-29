@@ -8,8 +8,7 @@ import pandas as pd
 
 from dataset.utils.biopython_getter import get_coords_from_pdb_file, get_coords_from_cif_file
 from dataset.utils.coords_augmenter import AbstractAugmenter, NullAugmenter
-from dataset.utils.embedding_builder import graph_builder
-
+from dataset.utils.embedding_builder import graph_coords_builder
 
 logger = logging.getLogger(__name__)
 
@@ -22,13 +21,15 @@ class IdentityCoordsDataset(Dataset):
             coords_path,
             ext="pdb",
             coords_augmenter: AbstractAugmenter | None = NullAugmenter(),
-            num_workers=1
+            num_workers=1,
+            graph_builder=graph_coords_builder
     ):
         super().__init__()
         self.coords = None
         self.coords_augmenter = coords_augmenter
         self.__exec(coords_list, coords_path, ext)
         self.nun_workers = num_workers if num_workers > 1 else 1
+        self.graph_builder = graph_builder
 
     def __exec(self, embedding_list, embedding_path, ext):
         self.load_coords(embedding_list, embedding_path, ext)
@@ -53,7 +54,7 @@ class IdentityCoordsDataset(Dataset):
 
     def __build_graph(self, idx, add_change=lambda *abc: abc):
         coords_i = self.coords.loc[idx]
-        out = graph_builder(
+        out = self.graph_builder(
             [{'cas': ch[0], 'seq': ch[1]} for ch in zip(coords_i['cas'], coords_i['seq'])],
             add_change=add_change,
             num_workers=self.nun_workers

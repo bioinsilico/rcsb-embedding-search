@@ -14,7 +14,7 @@ from dataset.pst.pst import load_pst_model
 from dataset.utils.biopython_getter import get_coords_from_pdb_file, get_coords_from_cif_file
 from dataset.utils.coords_augmenter import NullAugmenter, AbstractAugmenter, SelfAugmenterRandomFraction
 from dataset.utils.custom_weighted_random_sampler import CustomWeightedRandomSampler
-from dataset.utils.embedding_builder import graph_builder
+from dataset.utils.embedding_builder import graph_coords_builder
 from dataset.utils.tm_score_weight import binary_score, binary_weights, fraction_score, tm_score_weights
 from dataset.utils.tools import load_class_pairs_with_self_comparison, load_class_pairs
 from networks.transformer_pst import TransformerPstEmbeddingCosine
@@ -35,7 +35,8 @@ class TmScoreFromCoordDataset(Dataset):
             weighting_method=None,
             coords_augmenter: AbstractAugmenter | None = NullAugmenter(),
             num_workers=1,
-            include_self_comparison=False
+            include_self_comparison=False,
+            graph_builder=graph_coords_builder
     ):
         super().__init__()
         self.coords = pd.DataFrame()
@@ -45,6 +46,7 @@ class TmScoreFromCoordDataset(Dataset):
         self.coords_augmenter = NullAugmenter() if coords_augmenter is None else coords_augmenter
         self.nun_workers = num_workers if num_workers > 1 else 1
         self.include_self_comparison = include_self_comparison
+        self.graph_builder = graph_builder
         self.__exec(tm_score_file, coords_path, f".{ext}" if len(ext) > 0 else "")
 
     def __exec(self, tm_score_file, embedding_path, ext):
@@ -86,7 +88,7 @@ class TmScoreFromCoordDataset(Dataset):
         coords_i = self.coords.loc[self.coords['domain'] == dom_id]
         if len(coords_i) != 1:
             raise Exception(f'Data error: found {len(coords_i)} rows for {dom_id}')
-        out = graph_builder(
+        out = self.graph_builder(
             [{'cas': ch[0], 'seq': ch[1]} for ch in zip(coords_i.values[0][1], coords_i.values[0][2])],
             add_change=add_change,
             num_workers=self.nun_workers

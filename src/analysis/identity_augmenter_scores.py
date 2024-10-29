@@ -9,6 +9,7 @@ from torch_geometric.loader import DataLoader
 from config.utils import get_config_path
 from dataset.identity_coords_dataset import IdentityCoordsDataset
 from config.schema_config import TrainingConfig
+from dataset.utils.embedding_builder import graph_ch_coords_builder
 from lightning_module.analysis.lightning_pst_embedding_cosine import LitStructurePstEmbeddingScore
 
 cs = ConfigStore.instance()
@@ -25,7 +26,8 @@ def main(cfg: TrainingConfig):
         coords_list=cfg.training_set.tm_score_file,
         coords_path=cfg.training_set.data_path,
         num_workers=cfg.training_set.workers,
-        ext=cfg.training_set.data_ext
+        ext=cfg.training_set.data_ext,
+        graph_builder=graph_ch_coords_builder
     )
 
     inference_dataloader = DataLoader(

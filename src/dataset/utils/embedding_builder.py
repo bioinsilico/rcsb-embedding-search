@@ -10,7 +10,21 @@ from torch_geometric.utils import unbatch
 ESM_ALPHABET = esm.data.Alphabet.from_architecture("ESM-1b")
 
 
-def graph_builder(coords, eps=8, num_workers=1, add_change=lambda *x: x):
+def graph_ch_coords_builder(coords, eps=8, num_workers=1, add_change=lambda *x: x):
+    random.shuffle(coords)
+    coords = [add_change(
+        ch['cas'],
+        ch['seq']
+    ) for ch in coords]
+    return [__graph_builder(
+        torch.from_numpy(np.array(structure)),
+        "".join(sequence),
+        eps,
+        num_workers
+    ) for structure, sequence in coords]
+
+
+def graph_coords_builder(coords, eps=8, num_workers=1, add_change=lambda *x: x):
     random.shuffle(coords)
     structure, sequence = add_change(
         [xyz for ch in coords for xyz in ch['cas']],
