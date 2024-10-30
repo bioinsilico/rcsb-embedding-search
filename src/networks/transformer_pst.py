@@ -71,9 +71,14 @@ class TransformerPstEmbeddingCosine(nn.Module):
     def embedding_pooling(self, x, x_mask):
         return self.embedding(self.transformer(x, src_key_padding_mask=x_mask).sum(dim=1))
 
-    def graph_pooling(self, g):
-        x_batch, x_mask = self.graph_transformer_forward(g)
-        return self.embedding_pooling(x_batch, x_mask)
+    def graph_pooling(self, g_i):
+        x_batch = []
+        x_mask = []
+        for g in g_i:
+            batch, mask = self.graph_transformer_forward(g)
+            x_batch.append(batch)
+            x_mask.append(mask)
+        return self.embedding_pooling(cat(x_batch, dim=1), cat(x_mask, dim=1))
 
     def validation_forward(self, x, x_mask, y, y_mask):
         return nn.functional.cosine_similarity(
@@ -188,6 +193,15 @@ class TransformerPstMultiBranchEmbeddingCosine(nn.Module):
             self.embedding_pooling(cat(y_batch, dim=1), cat(y_mask, dim=1))
         )
 
+    def graph_pooling(self, g_i):
+        x_batch = []
+        x_mask = []
+        for g in g_i:
+            batch, mask = self.graph_transformer_forward(g)
+            x_batch.append(batch)
+            x_mask.append(mask)
+        return self.embedding_pooling(cat(x_batch, dim=1), cat(x_mask, dim=1))
+
     def forward(self, g_i, g_j):
         x_batch, x_mask = self.graph_transformer_forward(g_i)
         y_batch, y_mask = self.graph_transformer_forward(g_j)
@@ -278,6 +292,15 @@ class TransformerPstMetaEmbeddingCosine(nn.Module):
             self.embedding_pooling(x, x_mask),
             self.embedding_pooling(y, y_mask)
         )
+
+    def graph_pooling(self, g_i):
+        x_batch = []
+        x_mask = []
+        for g in g_i:
+            batch, mask = self.graph_transformer_forward(g)
+            x_batch.append(batch)
+            x_mask.append(mask)
+        return self.embedding_pooling(cat(x_batch, dim=1), cat(x_mask, dim=1))
 
     def forward(self, g_i, g_j):
         x_batch, x_mask = self.graph_transformer_forward(g_i)

@@ -26,4 +26,6 @@ class LitStructurePstEmbeddingPoolingFromGraph(L.LightningModule):
 
     def predict_step(self, batch, batch_idx):
         graph, graph_id = batch
+        if len(graph) == 0:
+            return None
         return self.model.graph_pooling(graph), graph_id

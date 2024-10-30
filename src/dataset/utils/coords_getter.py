@@ -48,7 +48,7 @@ def get_ca_coords(data_container, poly_ent_ids: set):
         atom_type = d_row["label_atom_id"]
         model_num = int(d_row["pdbx_PDB_model_num"])
         alt_loc = d_row["label_alt_id"]
-        if atom_type == "CA" and model_num == 1 and is_aa(aa_type) and (alt_loc == "." or alt_loc == "A"):
+        if atom_type == "CA" and model_num == 1 and (is_aa(aa_type) or aa_type == "UNK") and (alt_loc == "." or alt_loc == "A"):
             coords_current_chain.append([
                 float(d_row["Cartn_x"]),
                 float(d_row["Cartn_y"]),
@@ -57,7 +57,7 @@ def get_ca_coords(data_container, poly_ent_ids: set):
             label_seq_current_chain.append(
                 d_row['label_seq_id']
             )
-            current_seq.append(protein_letters_3to1_extended[aa_type])
+            current_seq.append(protein_letters_3to1_extended[aa_type] if aa_type != "UNK" else "X")
         asym_id = current_asym_id
     if len(coords_current_chain) >= min_num_residues and asym_id not in polychains_coords:
         polychains_coords[asym_id] = coords_current_chain
@@ -86,19 +86,29 @@ def get_coords_from_file(cif_file_url: str, fmt="bcif"):
 def get_coords_for_pdb_id(pdb_id: str):
     url = "https://models.rcsb.org/%s.bcif.gz" % pdb_id.lower()
     chain_coords, chain_seqs, chain_label_seqs = get_coords_from_file(url)
-    print("Found %d valid protein chains in %s. Asym_ids are : %s" % (len(chain_coords), pdb_id, ",".join(chain_coords.keys())))
-    return chain_coords, chain_seqs, chain_label_seqs
+    chains = chain_coords.keys()
+    return {
+        'cas': [chain_coords[ch] for ch in chains],
+        'seq': [chain_seqs[ch] for ch in chains],
+        'labels': [chain_label_seqs[ch] for ch in chains],
+        'chains': [ch for ch in chains]
+    }
 
 
 def get_coords_for_assembly_id(pdb_id: str, assembly_id: int):
     url = f"https://files.rcsb.org/pub/pdb/data/assemblies/mmCIF/all/{pdb_id.lower()}-assembly{assembly_id}.cif.gz"
-    chain_coords, chain_seqs, chain_label_seqs = get_coords_from_file(url, fmt="mmcif")
-    print("Found %d valid protein chains in %s. Asym_ids are : %s" % (
-        len(chain_coords),
-        pdb_id,
-        ",".join(chain_coords.keys())
-    ))
-    return chain_coords, chain_seqs, chain_label_seqs
+    try:
+        chain_coords, chain_seqs, chain_label_seqs = get_coords_from_file(url, fmt="mmcif")
+    except Exception:
+        raise Exception(f"Assembly {pdb_id}-{assembly_id} failed")
+
+    chains = chain_coords.keys()
+    return {
+        'cas': [chain_coords[ch] for ch in chains],
+        'seq': [chain_seqs[ch] for ch in chains],
+        'labels': [chain_label_seqs[ch] for ch in chains],
+        'chains': [ch for ch in chains]
+    }
 
 
 def main():

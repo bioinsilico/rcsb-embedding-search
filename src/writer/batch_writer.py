@@ -28,6 +28,8 @@ class CoreBatchWriter(BasePredictionWriter, ABC):
             batch_idx,
             dataloader_idx
     ):
+        if prediction is None:
+            return
         embeddings, dom_ids = prediction
         deque(map(
             self._write_embedding,
