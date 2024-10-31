@@ -95,6 +95,17 @@ def get_coords_for_pdb_id(pdb_id: str):
     }
 
 
+def get_coords_for_assym_id(pdb_id: str, assym_id: int):
+    url = "https://models.rcsb.org/%s.bcif.gz" % pdb_id.lower()
+    chain_coords, chain_seqs, chain_label_seqs = get_coords_from_file(url)
+    return {
+        'cas': [chain_coords[assym_id]],
+        'seq': [chain_seqs[assym_id]],
+        'labels': [chain_label_seqs[assym_id]],
+        'chains': [assym_id]
+    }
+
+
 def get_coords_for_assembly_id(pdb_id: str, assembly_id: int):
     url = f"https://files.rcsb.org/pub/pdb/data/assemblies/mmCIF/all/{pdb_id.lower()}-assembly{assembly_id}.cif.gz"
     try:

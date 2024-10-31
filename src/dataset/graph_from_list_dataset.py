@@ -42,7 +42,7 @@ class GraphFromListDataset(Dataset):
 
     def get(self, idx):
         graph = self.graphs.loc[idx]
-        return torch.load(graph['graph_file']), graph['graph_id']
+        return [torch.load(graph['graph_file'])], graph['graph_id']
 
 
 if __name__ == '__main__':
