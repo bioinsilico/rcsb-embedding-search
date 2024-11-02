@@ -1,8 +1,9 @@
 import torch.nn as nn
+from torch import cat
+
 from collections import OrderedDict
 
 from networks.layers import ResBlock
-
 
 class LinearEmbeddingCosine(nn.Module):
 
@@ -111,6 +112,65 @@ class TransformerResBlockEmbeddingCosine(nn.Module):
 
     def get_weights(self):
         return [(name, param) for name, param in self.embedding.named_parameters()]
+
+
+class TransformerEmbeddingMultiBranchEmbeddingCosine(nn.Module):
+    dropout = 0.1
+
+    def __init__(
+            self,
+            input_features=640,
+            dim_feedforward=1280,
+            hidden_layer=640,
+            nhead=10,
+            num_layers=6,
+            res_block_layers=0,
+            num_path=2,
+            path_block_layers=6
+    ):
+        super().__init__()
+
+        self.transformer_paths = nn.ModuleList([TransformerEmbeddingCosine(
+            input_features,
+            dim_feedforward,
+            hidden_layer,
+            nhead,
+            num_layers,
+            res_block_layers
+        ) for _ in range(0, num_path)])
+
+        res_in_dim = num_path * input_features
+        res_out_dim = num_path * hidden_layer
+        if path_block_layers == 0:
+            self.embedding = nn.Sequential(OrderedDict([
+                ('norm', nn.LayerNorm(res_in_dim)),
+                ('dropout', nn.Dropout(p=self.dropout)),
+                ('linear', nn.Linear(res_in_dim, res_out_dim)),
+                ('activation', nn.ReLU())
+            ]))
+        else:
+            res_block = OrderedDict([(
+                f'block{i}',
+                ResBlock(res_in_dim, res_out_dim, self.dropout)
+            ) for i in range(path_block_layers)])
+            res_block.update([
+                ('dropout', nn.Dropout(p=self.dropout)),
+                ('linear', nn.Linear(res_in_dim, res_out_dim)),
+                ('activation', nn.ReLU())
+            ])
+            self.embedding = nn.Sequential(res_block)
+
+    def embedding_pooling(self, x_batch, x_mask):
+        return self.embedding(cat(
+            [transformer.embedding_pooling(x_batch, x_mask) for transformer in self.transformer_paths],
+            dim=1
+        ))
+
+    def forward(self,  x, x_mask, y, y_mask):
+        return nn.functional.cosine_similarity(
+            self.embedding_pooling(x, x_mask),
+            self.embedding_pooling(y, y_mask)
+        )
 
 
 class TransformerEmbedding(nn.Module):
