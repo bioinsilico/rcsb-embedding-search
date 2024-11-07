@@ -18,17 +18,10 @@ def setup_logging():
                 'formatter': 'standard',
                 'level': 'INFO',
                 'stream': 'ext://sys.stdout',  # Use sys.stdout
-            },
-            'file': {
-                'class': 'logging.FileHandler',
-                'formatter': 'standard',
-                'level': 'INFO',
-                'filename': 'app.log',
-                'encoding': 'utf8',
-            },
+            }
         },
         'root': {
-            'handlers': ['console', 'file'],
+            'handlers': ['console'],
             'level': 'DEBUG',
         },
     }

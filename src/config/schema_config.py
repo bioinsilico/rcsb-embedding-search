@@ -58,6 +58,10 @@ class TMScoreDataset:
     data_ext: Optional[DataExtension]
     batch_size: int = MISSING
     embedding_tmp_path: Optional[Path]
+    training_class_file: Optional[Path]
+    testing_class_file: Optional[Path]
+    number_of_folds: Optional[int]
+    fold_number: Optional[int]
     workers: Optional[int] = 0
     data_augmenter: Any = None
     include_self_comparison: bool = False

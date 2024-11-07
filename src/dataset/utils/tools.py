@@ -3,6 +3,21 @@ import torch
 import pandas as pd
 
 
+def load_classes(class_file):
+    dtype = {
+        'domain': 'str',
+        'class': 'str'
+    }
+    return pd.read_csv(
+        class_file,
+        delimiter="\t",
+        header=None,
+        index_col=None,
+        names=['domain', 'class'],
+        dtype=dtype
+    )
+
+
 def load_class_pairs(tm_score_file):
     dtype = {
         'domain_i': 'str',
