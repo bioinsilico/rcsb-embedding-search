@@ -33,7 +33,7 @@ class GraphFromCoordsDataset(Dataset):
             data=[
                 (
                     graph_id
-                ) for graph_id in [row.strip() for row in open(graph_list)]
+                ) for graph_id in [row.strip() for row in (open(graph_list) if os.path.isfile(graph_list) else os.listdir(graph_list))]
                 if not os.path.isfile(os.path.join(output_path, f"{graph_id}.{postfix}"))
             ],
             columns=['graph_id']
