@@ -104,7 +104,7 @@ if __name__ == "__main__":
 
     failed_file = f"{out_path}/failed_{n_idx}.txt"
 
-    model: ESM3InferenceClient = ESM3.from_pretrained(ESM3_OPEN_SMALL, torch.device('cpu'))
+    model: ESM3InferenceClient = ESM3.from_pretrained(ESM3_OPEN_SMALL)
 
     full_pdb_list = [row.strip() for row in open(pdb_list_file)]
     pdb_list = split_list_get_index(full_pdb_list, n_split, n_idx)
