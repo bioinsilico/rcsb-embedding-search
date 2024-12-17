@@ -53,7 +53,6 @@ def compute_esm3_embeddings(pdb_id, out_path, failed_file):
                 f.write(f"{pdb_id}.{ch}")
 
 
-
 def split_list_get_index(lst, n, index):
     """
     Splits a list into N sublists and returns the sublist at the specified index.
