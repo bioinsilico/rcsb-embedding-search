@@ -27,7 +27,7 @@ def rename_atom_ch(atom_ch, ch = "A"):
     return renamed_atom_ch
 
 
-def compute_esm3_embeddings(pdb_id, out_path, failed_file):
+def compute_esm3_embeddings(model, pdb_id, out_path, failed_file):
     rcsb_fetch = rcsb.fetch(pdb_id, "bcif")
     bcif = BinaryCIFFile.read(rcsb_fetch)
     atom_array = get_structure(bcif, model=1, extra_fields=["b_factor"])
@@ -112,4 +112,4 @@ if __name__ == "__main__":
     logger.info(f"Full list length {len(full_pdb_list)} sub-list length {len(pdb_list)} index {n_idx}")
 
     for pdb_id in pdb_list:
-        compute_esm3_embeddings(pdb_id, out_path, failed_file)
+        compute_esm3_embeddings(model, pdb_id, out_path, failed_file)
