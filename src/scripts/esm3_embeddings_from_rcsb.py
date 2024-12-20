@@ -6,7 +6,7 @@ import torch
 import logging
 
 from biotite.database import rcsb
-from biotite.structure import AtomArray, filter_amino_acids
+from biotite.structure import AtomArray, filter_amino_acids, chain_iter, get_chains
 from biotite.structure.io.pdbx import BinaryCIFFile, get_structure
 
 from esm.utils.structure.protein_chain import ProteinChain
@@ -31,11 +31,13 @@ def compute_esm3_embeddings(model, pdb_id, out_path, failed_file):
     rcsb_fetch = rcsb.fetch(pdb_id, "bcif")
     bcif = BinaryCIFFile.read(rcsb_fetch)
     atom_array = get_structure(bcif, model=1, extra_fields=["b_factor"])
-    for ch in set(atom_array.chain_id):
-        atom_ch = atom_array[atom_array.chain_id == ch]
+    for atom_ch in chain_iter(atom_array):
         atom_ch = rename_atom_ch(atom_ch)
         if filter_amino_acids(atom_ch).sum() < 10:
             continue
+        if len(get_chains(atom_ch)) > 1:
+            raise ValueError("Inconsistent chain ids")
+        ch = get_chains(atom_ch)[0]
         try:
             protein_chain = ProteinChain.from_atomarray(atom_ch)
             protein = ESMProtein.from_protein_chain(protein_chain)
@@ -50,7 +52,7 @@ def compute_esm3_embeddings(model, pdb_id, out_path, failed_file):
             )
         except Exception:
             with open(failed_file, "a") as f:
-                f.write(f"{pdb_id}.{ch}")
+                f.write(f"{pdb_id}.{ch}\n")
 
 
 def split_list_get_index(lst, n, index):
