@@ -32,13 +32,14 @@ def compute_esm3_embeddings(model, pdb_id, out_path, failed_file):
     bcif = BinaryCIFFile.read(rcsb_fetch)
     atom_array = get_structure(bcif, model=1, extra_fields=["b_factor"])
     for atom_ch in chain_iter(atom_array):
-        atom_ch = rename_atom_ch(atom_ch)
+        ch = get_chains(atom_ch)[0]
         if filter_amino_acids(atom_ch).sum() < 10:
+            logger.info(f"Ignoring chain {ch} less than 10 res")
             continue
         if len(get_chains(atom_ch)) > 1:
             raise ValueError("Inconsistent chain ids")
-        ch = get_chains(atom_ch)[0]
         try:
+            atom_ch = rename_atom_ch(atom_ch)
             protein_chain = ProteinChain.from_atomarray(atom_ch)
             protein = ESMProtein.from_protein_chain(protein_chain)
             protein_tensor = model.encode(protein)
@@ -106,7 +107,7 @@ if __name__ == "__main__":
 
     failed_file = f"{out_path}/failed_{n_idx}.txt"
 
-    model: ESM3InferenceClient = ESM3.from_pretrained(ESM3_OPEN_SMALL)
+    model: ESM3InferenceClient = ESM3.from_pretrained(ESM3_OPEN_SMALL, torch.device('cpu'))
 
     full_pdb_list = [row.strip() for row in open(pdb_list_file)]
     pdb_list = split_list_get_index(full_pdb_list, n_split, n_idx)
@@ -114,4 +115,5 @@ if __name__ == "__main__":
     logger.info(f"Full list length {len(full_pdb_list)} sub-list length {len(pdb_list)} index {n_idx}")
 
     for pdb_id in pdb_list:
-        compute_esm3_embeddings(model, pdb_id, out_path, failed_file)
+        compute_esm3_embeddings(model, "1DPP", out_path, failed_file)
+        exit(0)
