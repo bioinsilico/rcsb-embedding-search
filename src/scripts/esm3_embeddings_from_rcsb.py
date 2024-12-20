@@ -6,7 +6,7 @@ import torch
 import logging
 
 from biotite.database import rcsb
-from biotite.structure import AtomArray, filter_amino_acids, chain_iter, get_chains
+from biotite.structure import AtomArray, filter_amino_acids, chain_iter, get_chains, get_residues
 from biotite.structure.io.pdbx import BinaryCIFFile, get_structure
 
 from esm.utils.structure.protein_chain import ProteinChain
@@ -30,11 +30,16 @@ def rename_atom_ch(atom_ch, ch = "A"):
 def compute_esm3_embeddings(model, pdb_id, out_path, failed_file):
     rcsb_fetch = rcsb.fetch(pdb_id, "bcif")
     bcif = BinaryCIFFile.read(rcsb_fetch)
-    atom_array = get_structure(bcif, model=1, extra_fields=["b_factor"])
+    atom_array = get_structure(
+        bcif,
+        model=1,
+        use_author_fields=False,
+        extra_fields=["b_factor"]
+    )
     for atom_ch in chain_iter(atom_array):
         ch = get_chains(atom_ch)[0]
-        if filter_amino_acids(atom_ch).sum() < 10:
-            logger.info(f"Ignoring chain {ch} less than 10 res")
+        if len(get_residues(atom_ch)[0]) < 10:
+            logger.info(f"Ignoring chain {ch} with {len(get_residues(atom_ch)[0])} res")
             continue
         if len(get_chains(atom_ch)) > 1:
             raise ValueError("Inconsistent chain ids")
@@ -51,7 +56,9 @@ def compute_esm3_embeddings(model, pdb_id, out_path, failed_file):
                 output.per_residue_embedding,
                 f"{out_path}/{pdb_id}.{ch}.pt"
             )
-        except Exception:
+        except Exception as e:
+            logger.info(f"Chain failed {pdb_id}.{ch}")
+            logger.exception(str(e))
             with open(failed_file, "a") as f:
                 f.write(f"{pdb_id}.{ch}\n")
 
@@ -107,7 +114,7 @@ if __name__ == "__main__":
 
     failed_file = f"{out_path}/failed_{n_idx}.txt"
 
-    model: ESM3InferenceClient = ESM3.from_pretrained(ESM3_OPEN_SMALL, torch.device('cpu'))
+    model: ESM3InferenceClient = ESM3.from_pretrained(ESM3_OPEN_SMALL)
 
     full_pdb_list = [row.strip() for row in open(pdb_list_file)]
     pdb_list = split_list_get_index(full_pdb_list, n_split, n_idx)
@@ -115,5 +122,4 @@ if __name__ == "__main__":
     logger.info(f"Full list length {len(full_pdb_list)} sub-list length {len(pdb_list)} index {n_idx}")
 
     for pdb_id in pdb_list:
-        compute_esm3_embeddings(model, "1DPP", out_path, failed_file)
-        exit(0)
+        compute_esm3_embeddings(model, pdb_id, out_path, failed_file)
