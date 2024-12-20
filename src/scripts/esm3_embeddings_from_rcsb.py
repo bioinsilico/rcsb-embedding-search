@@ -38,8 +38,9 @@ def compute_esm3_embeddings(model, pdb_id, out_path, failed_file):
     )
     for atom_ch in chain_iter(atom_array):
         ch = get_chains(atom_ch)[0]
-        if len(get_residues(atom_ch)[0]) < 10:
-            logger.info(f"Ignoring chain {ch} with {len(get_residues(atom_ch)[0])} res")
+        atom_res = atom_ch[filter_amino_acids(atom_ch)]
+        if len(atom_res) == 0 or len(get_residues(atom_res)[0]) < 10:
+            logger.info(f"Ignoring chain {pdb_id}.{ch} with {0 if len(atom_res) == 0 else len(get_residues(atom_res)[0])} res")
             continue
         if len(get_chains(atom_ch)) > 1:
             raise ValueError("Inconsistent chain ids")
