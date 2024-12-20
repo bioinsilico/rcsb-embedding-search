@@ -48,7 +48,7 @@ def compute_esm3_embeddings(model, pdb_id, out_path, failed_file):
                 output.per_residue_embedding,
                 f"{out_path}/{pdb_id}.{ch}.pt"
             )
-        except IOError:
+        except Exception:
             with open(failed_file, "a") as f:
                 f.write(f"{pdb_id}.{ch}")
 
