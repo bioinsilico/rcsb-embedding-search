@@ -28,14 +28,22 @@ def rename_atom_ch(atom_ch, ch = "A"):
 
 
 def compute_esm3_embeddings(model, pdb_id, out_path, failed_file):
-    rcsb_fetch = rcsb.fetch(pdb_id, "bcif")
-    bcif = BinaryCIFFile.read(rcsb_fetch)
-    atom_array = get_structure(
-        bcif,
-        model=1,
-        use_author_fields=False,
-        extra_fields=["b_factor"]
-    )
+    try:
+        rcsb_fetch = rcsb.fetch(pdb_id, "bcif")
+        bcif = BinaryCIFFile.read(rcsb_fetch)
+        atom_array = get_structure(
+            bcif,
+            model=1,
+            use_author_fields=False,
+            extra_fields=["b_factor"]
+        )
+    except Exception as e:
+        logger.info(f"PDB entry failed {pdb_id}")
+        logger.exception(str(e))
+        with open(failed_file, "a") as f:
+            f.write(f"{pdb_id}#entry\n")
+        return
+
     for atom_ch in chain_iter(atom_array):
         ch = get_chains(atom_ch)[0]
         atom_res = atom_ch[filter_amino_acids(atom_ch)]
