@@ -45,10 +45,13 @@ def compute_esm3_embeddings(model, pdb_id, out_path, failed_file):
         return
 
     for atom_ch in chain_iter(atom_array):
-        if len(get_chains(atom_ch)) == 0:
+        try:
+            ch = get_chains(atom_ch)[0]
+        except Exception as e:
             logger.info(f"Ignoring null chain from {pdb_id}")
+            with open(failed_file, "a") as f:
+                f.write(f"{pdb_id}#null_chain\n")
             continue
-        ch = get_chains(atom_ch)[0]
         atom_res = atom_ch[filter_amino_acids(atom_ch)]
         if len(atom_res) == 0 or len(get_residues(atom_res)[0]) < 10:
             logger.info(f"Ignoring chain {pdb_id}.{ch} with {0 if len(atom_res) == 0 else len(get_residues(atom_res)[0])} res")
