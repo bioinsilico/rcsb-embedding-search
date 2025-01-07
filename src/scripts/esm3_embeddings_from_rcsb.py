@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import argparse
 
 import torch
@@ -112,6 +113,23 @@ def split_list_get_index(lst, n, index):
     return sublists[index]
 
 
+def list_files_in_directory(directory_path):
+    try:
+        # List all entries in the directory
+        all_entries = os.listdir(directory_path)
+
+        # Filter out directories, keeping only files
+        file_names = [
+            entry.split(".")[0] for entry in all_entries
+            if os.path.isfile(os.path.join(directory_path, entry))
+        ]
+
+        return file_names
+    except FileNotFoundError:
+        # If the directory does not exist, return an empty list or handle the error as needed
+        return []
+
+
 if __name__ == "__main__":
     import config.logging_config
 
@@ -127,6 +145,8 @@ if __name__ == "__main__":
     n_split = args.n_split
     n_idx = args.n_idx
 
+    ready_pdb_list = list_files_in_directory(out_path)
+
     failed_file = f"{out_path}/failed_{n_idx}.txt"
 
     model: ESM3InferenceClient = ESM3.from_pretrained(ESM3_OPEN_SMALL)
@@ -137,4 +157,6 @@ if __name__ == "__main__":
     logger.info(f"Full list length {len(full_pdb_list)} sub-list length {len(pdb_list)} index {n_idx}")
 
     for pdb_id in pdb_list:
+        if pdb_id in ready_pdb_list:
+            continue
         compute_esm3_embeddings(model, pdb_id, out_path, failed_file)
