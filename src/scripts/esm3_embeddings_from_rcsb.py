@@ -158,5 +158,6 @@ if __name__ == "__main__":
 
     for pdb_id in pdb_list:
         if pdb_id in ready_pdb_list:
+            logger.info(f"Entry {pdb_id} is ready")
             continue
         compute_esm3_embeddings(model, pdb_id, out_path, failed_file)
