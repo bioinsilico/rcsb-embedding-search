@@ -41,7 +41,10 @@ class EmbeddingsDataset(Dataset):
         return len(self.embedding)
 
     def __getitem__(self, idx):
-        return torch.load(self.embedding.loc[idx, 'embedding']), self.embedding.loc[idx, 'dom_id']
+        return torch.load(
+            self.embedding.loc[idx, 'embedding'],
+            map_location=torch.device('cpu')
+        ), self.embedding.loc[idx, 'dom_id']
 
 
 if __name__ == '__main__':
