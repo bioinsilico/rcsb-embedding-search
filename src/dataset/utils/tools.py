@@ -92,6 +92,8 @@ def collate_seq_embeddings(batch_list):
             - padded_batch (torch.Tensor): A tensor of shape (batch_size, max_seq_length, embedding_dim), where each sample is padded to the max sequence length.
             - mask_batch (torch.Tensor): A tensor of shape (batch_size, max_seq_length) where padded positions are marked as False.
     """
+    if batch_list[0] is None:
+        return None
     device = batch_list[0].device  # Get the device of the input tensors
     max_len = max(sample.size(0) for sample in batch_list)  # Determine the maximum sequence length
     dim = batch_list[0].size(1)  # Determine the embedding dimension
