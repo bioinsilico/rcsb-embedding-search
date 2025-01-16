@@ -26,7 +26,10 @@ def concatenate_tensors(file_list, dim=0):
     tensors = []
     for file in file_list:
         try:
-            tensor = torch.load(file)
+            tensor = torch.load(
+                file,
+                map_location=torch.device('cpu')
+            )
             tensors.append(tensor)
         except Exception as e:
             print(f"Error loading tensor from {file}: {e}")
