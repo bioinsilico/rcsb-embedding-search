@@ -34,7 +34,7 @@ class EsmEmbeddingFromPdbDataset(Dataset):
         logger.info(f"Loading coords from path {coords_path}")
         self.coords = pd.DataFrame(
             data=[(
-                    dom_id,
+                    dom_id[0:-4] if ".pdb" in dom_id or ".ent" in dom_id else dom_id,
                     os.path.join(coords_path, f"{dom_id}")
             )for dom_id in os.listdir(coords_path)],
             columns=['domain', 'file']
