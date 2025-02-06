@@ -1,4 +1,8 @@
+import logging
 import lightning as L
+
+
+logger = logging.getLogger(__name__)
 
 
 class LitStructurePstEmbeddingPooling(L.LightningModule):
@@ -28,7 +32,12 @@ class LitStructurePstOrNullEmbeddingPooling(L.LightningModule):
         if batch[0] is None:
             return None
         (x, x_mask), dom_id = batch
-        return self.model.embedding_pooling(x, x_mask), dom_id
+        try:
+            return self.model.embedding_pooling(x, x_mask), dom_id
+        except Exception as e:
+            logger.error(f"{dom_id} prediction failed")
+            logger.error(f"{e}")
+            return None
 
 
 class LitStructurePstEmbeddingPoolingFromGraph(L.LightningModule):
