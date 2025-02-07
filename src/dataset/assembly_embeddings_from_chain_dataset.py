@@ -24,17 +24,21 @@ def concatenate_tensors(file_list, dim=0):
         torch.Tensor: The concatenated tensor.
     """
     tensors = []
+    total_memory = 0
     for file in file_list:
         try:
             tensor = torch.load(
                 file,
                 map_location=torch.device('cpu')
             )
+            total_memory += tensor.numel() * tensor.element_size()
             tensors.append(tensor)
         except Exception as e:
             logger.error(f"Error loading tensor from {file}: {e}")
             continue
-
+        if total_memory > 4e11:
+            logger.warning("Limiting number of assembly chains")
+            break
     if tensors:
         return torch.cat(tensors, dim=dim)
     else:
