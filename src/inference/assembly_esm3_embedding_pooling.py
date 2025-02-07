@@ -50,7 +50,10 @@ def main(cfg: InferenceConfig):
     inference_writer = instantiate(
         cfg.inference_writer
     )
-    trainer = L.Trainer(callbacks=[inference_writer])
+    trainer = L.Trainer(
+        callbacks=[inference_writer],
+        devices=cfg.computing_resources.devices
+    )
     trainer.predict(
         model,
         inference_dataloader
