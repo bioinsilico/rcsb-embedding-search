@@ -32,7 +32,7 @@ def concatenate_tensors(file_list, dim=0):
             )
             tensors.append(tensor)
         except Exception as e:
-            print(f"Error loading tensor from {file}: {e}")
+            logger.error(f"Error loading tensor from {file}: {e}")
             continue
 
     if tensors:
