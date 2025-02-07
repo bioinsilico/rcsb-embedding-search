@@ -36,7 +36,7 @@ def concatenate_tensors(file_list, dim=0):
         except Exception as e:
             logger.error(f"Error loading tensor from {file}: {e}")
             continue
-        if total_memory > 4e11:
+        if total_memory > (200 * 1e9):
             logger.warning("Limiting number of assembly chains")
             break
     if tensors:
