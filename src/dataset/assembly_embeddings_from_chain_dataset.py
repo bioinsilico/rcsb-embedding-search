@@ -39,8 +39,10 @@ def concatenate_tensors(file_list, dim=0):
         if total_memory > (200 * 1e9):
             logger.warning("Limiting number of assembly chains")
             break
-    if tensors:
-        return torch.cat(tensors, dim=dim)
+    if tensors and len(tensors) > 0:
+        tensor_cat = torch.cat(tensors, dim=dim)
+        logger.info(f"Tensor shape {tensor_cat.shape} size {tensor_cat.numel() * tensor_cat.element_size()}")
+        return tensor_cat
     else:
         raise ValueError("No valid tensors were loaded to concatenate.")
 
