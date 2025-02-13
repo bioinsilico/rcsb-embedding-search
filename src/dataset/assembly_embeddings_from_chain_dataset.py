@@ -97,7 +97,7 @@ class AssemblyEmbeddingsDataset(Dataset):
     def __getitem__(self, idx):
         [pdb_id, assembly_id] = self.assembly_list[idx].split("-")
         try:
-            return compute_esm3_assembly(pdb_id, assembly_id, self.chain_embedding_path), self.assembly_list[idx]
+            return compute_esm3_assembly(pdb_id, assembly_id, self.chain_embedding_path, self.max_residues), self.assembly_list[idx]
         except Exception:
             logger.info(f"Assembly {pdb_id}-{assembly_id} failed")
             return None, self.assembly_list[idx]
