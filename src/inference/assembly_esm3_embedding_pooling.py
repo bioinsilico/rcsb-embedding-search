@@ -25,7 +25,8 @@ def main(cfg: InferenceConfig):
 
     inference_set = AssemblyEmbeddingsDataset(
         assembly_list=cfg.inference_set.embedding_source,
-        chain_embedding_path=cfg.inference_set.embedding_path
+        chain_embedding_path=cfg.inference_set.embedding_path,
+        max_residues=cfg.metadata.max_residues
     )
 
     inference_dataloader = DataLoader(

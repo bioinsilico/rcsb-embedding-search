@@ -12,42 +12,43 @@ from dataset.utils.tools import collate_seq_embeddings
 logger = logging.getLogger(__name__)
 
 
-def concatenate_tensors(file_list, dim=0):
+def concatenate_tensors(file_list, max_residues, dim=0):
     """
     Concatenates a list of tensors stored in individual files along a specified dimension.
 
     Args:
         file_list (list of str): List of file paths to tensor files.
+        max_residues (int): Maximum number of residues allowed in the assembly
         dim (int): The dimension along which to concatenate the tensors. Default is 0.
 
     Returns:
         torch.Tensor: The concatenated tensor.
     """
     tensors = []
-    total_memory = 0
+    total_residues = 0
     for file in file_list:
         try:
             tensor = torch.load(
                 file,
                 map_location=torch.device('cpu')
             )
-            total_memory += tensor.numel() * tensor.element_size()
+            total_residues += tensor.shape[0]
             tensors.append(tensor)
         except Exception as e:
             logger.error(f"Error loading tensor from {file}: {e}")
             continue
-        if total_memory > (200 * 1e9):
-            logger.warning("Limiting number of assembly chains")
+        if total_residues > max_residues:
+            logger.warning(f"Assembly residues overflow {max_residues}. Only using {total_residues}")
             break
     if tensors and len(tensors) > 0:
         tensor_cat = torch.cat(tensors, dim=dim)
-        logger.info(f"Tensor shape {tensor_cat.shape} size {tensor_cat.numel() * tensor_cat.element_size()}")
+        logger.info(f"Tensor shape {tensor_cat.shape}")
         return tensor_cat
     else:
         raise ValueError("No valid tensors were loaded to concatenate.")
 
 
-def compute_esm3_assembly(pdb_id, assembly_id, esm3_embeddings):
+def compute_esm3_assembly(pdb_id, assembly_id, esm3_embeddings, max_residues):
     rcsb_fetch = rcsb.fetch(pdb_id, "bcif")
     bcif = BinaryCIFFile.read(rcsb_fetch)
     for _assembly_id in list_assemblies(bcif):
@@ -75,7 +76,7 @@ def compute_esm3_assembly(pdb_id, assembly_id, esm3_embeddings):
 
         logger.info(f"Building assembly {pdb_id}-{assembly_id} from chains {assembly_ch}")
 
-        return concatenate_tensors([f"{esm3_embeddings}/{pdb_id}.{ch}.pt" for ch in assembly_ch])
+        return concatenate_tensors([f"{esm3_embeddings}/{pdb_id}.{ch}.pt" for ch in assembly_ch], max_residues)
 
 
 class AssemblyEmbeddingsDataset(Dataset):
@@ -83,10 +84,12 @@ class AssemblyEmbeddingsDataset(Dataset):
     def __init__(
             self,
             assembly_list,
-            chain_embedding_path
+            chain_embedding_path,
+            max_residues
     ):
         self.assembly_list = [assembly_id.strip() for assembly_id in open(assembly_list)]
         self.chain_embedding_path = chain_embedding_path
+        self.max_residues = max_residues
 
     def __len__(self):
         return len(self.assembly_list)
@@ -108,7 +111,8 @@ if __name__ == '__main__':
 
     dataset = AssemblyEmbeddingsDataset(
         args.assembly_list,
-        args.chain_embedding_path
+        args.chain_embedding_path,
+        100000
     )
 
     dataloader = DataLoader(
