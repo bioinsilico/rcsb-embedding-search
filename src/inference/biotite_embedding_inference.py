@@ -47,7 +47,8 @@ def main(cfg: InferenceConfig):
         params=cfg
     )
     inference_writer = instantiate(
-        cfg.inference_writer
+        cfg.inference_writer,
+        df_id=cfg.metadata.task_id
     )
     trainer = L.Trainer(
         callbacks=[inference_writer],
