@@ -25,6 +25,8 @@ class EmbeddingsDataset(Dataset):
 
     def load_embedding(self, embedding_list, embedding_path):
         logger.info(f"Loading embeddings from path {embedding_path}")
+        if type(embedding_list) is not list:
+            logger.info(f"Embedding list file {embedding_list}")
         self.embedding = pd.DataFrame(
             data=[
                 (dom_id, os.path.join(embedding_path, f"{dom_id}.pt"))
