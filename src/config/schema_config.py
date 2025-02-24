@@ -99,7 +99,6 @@ class InferenceWriter:
 @dataclass
 class LocalFolder:
     data: Path = MISSING
-    pst_model: Path = MISSING
     trained_model: Path = MISSING
 
 

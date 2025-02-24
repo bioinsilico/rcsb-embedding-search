@@ -8,9 +8,8 @@ from hydra.utils import instantiate
 from torch.utils.data import DataLoader
 
 from config.utils import get_config_path
-from dataset.embeddings_dataset import EmbeddingsDataset
-from dataset.utils.tools import collate_seq_embeddings
-from lightning_module.inference.lightning_pst_embedding_pooling import LitStructurePstEmbeddingPooling
+from dataset.biotite_structure_from_list import BiotiteStructureFromList
+from lightning_module.inference.biotite_embeding_inference import LitStructureBiotiteEmbeddingPooling
 from config.schema_config import InferenceConfig
 
 cs = ConfigStore.instance()
@@ -23,34 +22,40 @@ def main(cfg: InferenceConfig):
 
     logger.info(f"Using config file: {get_config_path()}")
 
-    inference_set = EmbeddingsDataset(
-        embedding_list=cfg.inference_set.embedding_source,
-        embedding_path=cfg.inference_set.embedding_path
+    def __build_url(af_id):
+        return f"https://alphafold.ebi.ac.uk/files/{af_id}-model_v4.cif"
+
+    inference_set = BiotiteStructureFromList(
+        rcsb_file_list=cfg.inference_set.embedding_source,
+        build_url=__build_url
     )
 
     inference_dataloader = DataLoader(
         dataset=inference_set,
         batch_size=cfg.inference_set.batch_size,
         num_workers=cfg.inference_set.workers,
-        collate_fn=lambda emb: (
-            collate_seq_embeddings([x for x, z in emb]),
-            tuple([z for x, z in emb])
-        )
+        collate_fn=lambda emb: emb
     )
 
     nn_model = instantiate(
         cfg.embedding_network
     )
 
-    model = LitStructurePstEmbeddingPooling.load_from_checkpoint(
+    model = LitStructureBiotiteEmbeddingPooling.load_from_checkpoint(
         cfg.checkpoint,
         nn_model=nn_model,
         params=cfg
     )
     inference_writer = instantiate(
-        cfg.inference_writer
+        cfg.inference_writer,
+        df_id=cfg.metadata.task_id
     )
-    trainer = L.Trainer(callbacks=[inference_writer])
+    trainer = L.Trainer(
+        callbacks=[inference_writer],
+        num_nodes=cfg.computing_resources.nodes,
+        devices=cfg.computing_resources.devices,
+        strategy=cfg.computing_resources.strategy
+    )
     trainer.predict(
         model,
         inference_dataloader

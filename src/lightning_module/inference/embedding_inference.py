@@ -5,7 +5,7 @@ import lightning as L
 logger = logging.getLogger(__name__)
 
 
-class LitStructurePstEmbeddingPooling(L.LightningModule):
+class LitEmbeddingInference(L.LightningModule):
 
     def __init__(
             self,
@@ -19,7 +19,7 @@ class LitStructurePstEmbeddingPooling(L.LightningModule):
         return self.model.embedding_pooling(x, x_mask), dom_id
 
 
-class LitStructurePstOrNullEmbeddingPooling(L.LightningModule):
+class LitEmbeddingOrNullInference(L.LightningModule):
 
     def __init__(
             self,
@@ -38,19 +38,3 @@ class LitStructurePstOrNullEmbeddingPooling(L.LightningModule):
             logger.error(f"{dom_id} prediction failed")
             logger.error(f"{e}")
             return None
-
-
-class LitStructurePstEmbeddingPoolingFromGraph(L.LightningModule):
-
-    def __init__(
-            self,
-            nn_model
-    ):
-        super().__init__()
-        self.model = nn_model
-
-    def predict_step(self, batch, batch_idx):
-        graph, graph_id = batch
-        if len(graph) == 0:
-            return None
-        return self.model.graph_pooling(graph), graph_id

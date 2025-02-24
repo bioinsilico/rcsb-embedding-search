@@ -4,11 +4,13 @@ import hydra
 from hydra.core.config_store import ConfigStore
 import lightning as L
 from hydra.utils import instantiate
-from torch_geometric.loader import DataLoader
+
+from torch.utils.data import DataLoader
 
 from config.utils import get_config_path
-from dataset.graph_from_list_dataset import GraphFromListDataset
-from lightning_module.inference.lightning_pst_embedding_pooling import LitStructurePstEmbeddingPoolingFromGraph
+from dataset.embeddings_dataset import EmbeddingsDataset
+from dataset.utils.tools import collate_seq_embeddings
+from lightning_module.inference.embedding_inference import LitEmbeddingInference
 from config.schema_config import InferenceConfig
 
 cs = ConfigStore.instance()
@@ -21,24 +23,26 @@ def main(cfg: InferenceConfig):
 
     logger.info(f"Using config file: {get_config_path()}")
 
-    inference_set = GraphFromListDataset(
-        graph_list=cfg.inference_set.embedding_source,
-        graph_path=cfg.inference_set.embedding_path,
-        output_path=cfg.inference_writer.output_path,
-        postfix=cfg.inference_writer.postfix
+    inference_set = EmbeddingsDataset(
+        embedding_list=cfg.inference_set.embedding_source,
+        embedding_path=cfg.inference_set.embedding_path
     )
 
     inference_dataloader = DataLoader(
         dataset=inference_set,
         batch_size=cfg.inference_set.batch_size,
-        num_workers=cfg.inference_set.workers
+        num_workers=cfg.inference_set.workers,
+        collate_fn=lambda emb: (
+            collate_seq_embeddings([x for x, z in emb]),
+            tuple([z for x, z in emb])
+        )
     )
 
     nn_model = instantiate(
         cfg.embedding_network
     )
 
-    model = LitStructurePstEmbeddingPoolingFromGraph.load_from_checkpoint(
+    model = LitEmbeddingInference.load_from_checkpoint(
         cfg.checkpoint,
         nn_model=nn_model,
         params=cfg

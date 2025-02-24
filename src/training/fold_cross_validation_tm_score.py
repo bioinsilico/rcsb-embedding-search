@@ -16,10 +16,9 @@ from dataset.tm_score_from_embeddings_dataset import TmScoreFromEmbeddingsDatase
 from dataset.utils.custom_weighted_random_sampler import CustomWeightedRandomSampler
 from dataset.utils.tm_score_weight import fraction_score, tm_score_weights
 from dataset.utils.tools import collate_fn
-from lightning_module.training.lightning_batch_embedding import LitStructureBatchEmbedding
+from lightning_module.training.embedding_training import LitEmbeddingTraining
 
 from config.schema_config import TrainingConfig
-from lightning_module.training.lightning_batch_embedding_static_validation import LitStructureBatchEmbeddingStaticValidation
 
 cs = ConfigStore.instance()
 cs.store(name="training_default", node=TrainingConfig)
@@ -74,16 +73,16 @@ def main(cfg: TrainingConfig):
         cfg.embedding_network
     )
 
-    model = LitStructureBatchEmbeddingStaticValidation(
+    model = LitEmbeddingTraining(
         nn_model=nn_model,
         learning_rate=cfg.training_parameters.learning_rate,
         params=cfg
     )
 
     checkpoint_callback = L.pytorch.callbacks.ModelCheckpoint(
-        monitor=LitStructureBatchEmbedding.PR_AUC_METRIC_NAME,
+        monitor=LitEmbeddingTraining.PR_AUC_METRIC_NAME,
         mode='max',
-        filename='{epoch}-{' + LitStructureBatchEmbedding.PR_AUC_METRIC_NAME + ':.2f}'
+        filename='{epoch}-{' + LitEmbeddingTraining.PR_AUC_METRIC_NAME + ':.2f}'
     )
 
     lr_monitor = L.pytorch.callbacks.LearningRateMonitor(

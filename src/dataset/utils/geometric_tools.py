@@ -1,8 +1,5 @@
-import os
 import math
-
 import torch
-from torch_geometric.data import Data
 
 from dataset.utils.geometry import angle_between_points, exp_distance, distance_between_points, angle_between_planes, \
     angle_between_four_points
@@ -125,28 +122,3 @@ def get_res_attr(residues):
     ])
     return graph_nodes, graph_edges, edge_attr
 
-
-def get_geo_from_entry_structure(chain_coords):
-    geos = []
-    residues = []
-    for ch, ch_residues in chain_coords.items():
-        residues.extend(ch_residues)
-    graph_nodes, graph_edges, edge_attr = get_res_attr(residues)
-    geos.append((None, Data(
-        graph_nodes,
-        edge_index=graph_edges.t().contiguous(),
-        edge_attr=edge_attr
-    )))
-    return geos
-
-
-def get_geo_from_single_chain_structure(chain_coords):
-    geos = []
-    for ch, residues in chain_coords.items():
-        graph_nodes, graph_edges, edge_attr = get_res_attr(residues)
-        geos.append((ch, Data(
-            graph_nodes,
-            edge_index=graph_edges.t().contiguous(),
-            edge_attr=edge_attr
-        )))
-    return geos

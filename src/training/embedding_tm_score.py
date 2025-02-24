@@ -8,20 +8,15 @@ from hydra.utils import instantiate
 from lightning import seed_everything
 from lightning.pytorch.plugins.environments import SLURMEnvironment
 from torch.utils.data import DataLoader
-from torch import stack
 
-from callbacks.validation_reload import ReloadValidationDataLoaderCallback
 from config.utils import get_config_path
 from dataset.tm_score_from_embeddings_dataset import TmScoreFromEmbeddingsDataset
-from dataset.tm_score_from_embeddings_provider_dataset import TmScoreFromEmbeddingsProviderDataset
 from dataset.utils.custom_weighted_random_sampler import CustomWeightedRandomSampler
-from dataset.utils.embedding_provider import SqliteEmbeddingProvider
 from dataset.utils.tm_score_weight import fraction_score, tm_score_weights
 from dataset.utils.tools import collate_fn
-from lightning_module.training.lightning_batch_embedding import LitStructureBatchEmbedding
+from lightning_module.training.embedding_training import LitEmbeddingTraining
 
 from config.schema_config import TrainingConfig
-
 
 cs = ConfigStore.instance()
 cs.store(name="training_default", node=TrainingConfig)
@@ -55,11 +50,9 @@ def main(cfg: TrainingConfig):
         collate_fn=collate_fn
     )
 
-    embedding_provider = SqliteEmbeddingProvider()
-
-    validation_set = TmScoreFromEmbeddingsProviderDataset(
+    validation_set = TmScoreFromEmbeddingsDataset(
         tm_score_file=cfg.validation_set.tm_score_file,
-        embedding_provider=embedding_provider
+        embedding_path=cfg.validation_set.data_path
     )
     validation_dataloader = DataLoader(
         dataset=validation_set,
@@ -67,27 +60,23 @@ def main(cfg: TrainingConfig):
         num_workers=cfg.validation_set.workers,
         persistent_workers=True if cfg.validation_set.workers > 0 else False,
         pin_memory=True,
-        collate_fn=lambda emb: (
-            stack([x for x, y, z in emb], dim=0),
-            stack([y for x, y, z in emb], dim=0),
-            stack([z for x, y, z in emb], dim=0)
-        )
+        collate_fn=collate_fn
     )
 
     nn_model = instantiate(
         cfg.embedding_network
     )
 
-    model = LitStructureBatchEmbedding(
+    model = LitEmbeddingTraining(
         nn_model=nn_model,
         learning_rate=cfg.training_parameters.learning_rate,
         params=cfg
     )
 
     checkpoint_callback = L.pytorch.callbacks.ModelCheckpoint(
-        monitor=LitStructureBatchEmbedding.PR_AUC_METRIC_NAME,
+        monitor=LitEmbeddingTraining.PR_AUC_METRIC_NAME,
         mode='max',
-        filename='{epoch}-{' + LitStructureBatchEmbedding.PR_AUC_METRIC_NAME + ':.2f}'
+        filename='{epoch}-{' + LitEmbeddingTraining.PR_AUC_METRIC_NAME + ':.2f}'
     )
 
     lr_monitor = L.pytorch.callbacks.LearningRateMonitor(
@@ -100,7 +89,7 @@ def main(cfg: TrainingConfig):
         num_nodes=cfg.computing_resources.nodes,
         devices=cfg.computing_resources.devices,
         strategy=cfg.computing_resources.strategy,
-        callbacks=[checkpoint_callback, lr_monitor, ReloadValidationDataLoaderCallback(embedding_provider)],
+        callbacks=[checkpoint_callback, lr_monitor],
         plugins=[SLURMEnvironment(requeue_signal=signal.SIGUSR1)],
         default_root_dir=cfg.default_root_dir
     )
