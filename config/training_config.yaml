@@ -13,9 +13,9 @@ validation_set: ???
 training_parameters:
   learning_rate: 1e-5
   weight_decay: 0.
-  warmup_epochs: 1
+  warmup_epochs: 2
   epochs: 1000
-  check_val_every_n_epoch: 25
+  check_val_every_n_epoch: 5
   epoch_size: 320000
   lr_frequency: 1
   lr_interval: epoch
