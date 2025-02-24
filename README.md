@@ -6,6 +6,7 @@ This repository contains the scripts to train a neural network model for Protein
 The embedding model consists of two components: 
 - A protein language model PLM that computes residue-level embeddings a given 3D structure
 - A transformer-based neural network that aggregates these residue-level embeddings into a single vector
+
 ![Embedding model architecture](assets/embedding-model-architecture.png)
 
 #### PLM residue embeddings 
