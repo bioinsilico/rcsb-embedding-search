@@ -9,10 +9,10 @@ The embedding model consists of two components:
 
 ![Embedding model architecture](assets/embedding-model-architecture.png)
 
-#### PLM residue embeddings 
+#### PLM 
 Protein residue-level embeddings are computed with the [ESM](https://www.evolutionaryscale.ai/) generative protein language model.
 
-#### Aggregator
+#### Residue Embedding Aggregator
 
 The aggregator consists of six transformer encoder layers, with 3,072 neurons feedforward layer and ReLU activations. 
 Following the encoders, a summation pooling operation and 12 fully connected residual layers aggregate the resulting embeddings into a single 1,536-dimensional vector.
