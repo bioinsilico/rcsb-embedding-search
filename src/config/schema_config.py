@@ -8,7 +8,7 @@ from typing import Optional, Any
 
 @dataclass
 class TrainingConfig:
-    local_folder: LocalFolder = MISSING
+    local_folder: Optional[LocalFolder]
     computing_resources: ComputingResources = MISSING
     global_seed: int = MISSING
     checkpoint: Optional[str]
@@ -23,7 +23,7 @@ class TrainingConfig:
 
 @dataclass
 class InferenceConfig:
-    local_folder: LocalFolder = MISSING
+    local_folder: Optional[LocalFolder]
     computing_resources: ComputingResources = MISSING
     checkpoint: str = MISSING
     network_parameters: NetworkParams = MISSING
@@ -44,7 +44,7 @@ class NetworkParams:
 
 @dataclass
 class EmbeddingDataset:
-    local_folder: LocalFolder = MISSING
+    local_folder: Optional[LocalFolder]
     embedding_source: Path = MISSING
     embedding_path: Path = MISSING
     batch_size: int = MISSING
@@ -53,7 +53,7 @@ class EmbeddingDataset:
 
 @dataclass
 class TMScoreDataset:
-    local_folder: LocalFolder = MISSING
+    local_folder: Optional[LocalFolder]
     tm_score_file: Path = MISSING
     data_path: Path = MISSING
     data_ext: Optional[DataExtension]
