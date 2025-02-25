@@ -98,7 +98,7 @@ python src/inference/embedding_inference.py \
 Example of inference configuration file
 
 ```yaml
-checkpoint: /<local_path>/<model>.pt
+checkpoint: /<local_path>/<model>.ckpt
 
 inference_writer:
   _target_: writer.batch_writer.CsvBatchWriter
