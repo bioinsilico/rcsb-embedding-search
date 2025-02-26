@@ -22,6 +22,10 @@ Protein residue-level embeddings are computed with the [ESM](https://www.evoluti
 The aggregator consists of six transformer encoder layers, with 3,072 neurons feedforward layer and ReLU activations. 
 Following the encoders, a summation pooling operation and 12 fully connected residual layers aggregate the resulting embeddings into a single 1,536-dimensional vector.
 
+A pretrained Residue Embedding Aggregator model is available at [huggingface](https://huggingface.co/jseguramora/rcsb-embedding-model/resolve/main/rcsb-embedding-model.pt)
+
+
+
 ### Model Training
 The embedding model was trained to predict the maximum TM-score between pairs of 3D structures.
 During training the model operated as a twin neural network, utilizing shared weights to produce embeddings for pairs of 3D structures. 
