@@ -26,4 +26,4 @@ if __name__ == '__main__':
         nn_model=nn_model
     )
 
-    torch.save(model, args.out_file)
+    torch.save(model.model.state_dict(), args.out_file)
