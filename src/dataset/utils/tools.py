@@ -33,6 +33,22 @@ def load_class_pairs(tm_score_file):
     )
 
 
+def load_dual_pairs(tm_score_file):
+    dtype = {
+        'domain_i': 'str',
+        'domain_j': 'str',
+        'score_max': 'float32',
+        'score': 'float32'
+    }
+    return pd.read_csv(
+        tm_score_file,
+        header=None,
+        index_col=None,
+        names=['domain_i', 'domain_j', 'score_max', 'score'],
+        dtype=dtype
+    )
+
+
 def get_unique_pairs(tm_score_file):
     class_pairs = load_class_pairs(tm_score_file)
     return list(pd.concat([

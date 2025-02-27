@@ -6,11 +6,61 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
-def tm_score_weights(n_intervals, identity_scale_factor):
+class TmScoreWeight:
+
+    def __init__(
+            self,
+            np_scores,
+            n_intervals=5,
+            identity_scale_factor=1.
+    ):
+        self.weights = np.array([])
+        self.n_intervals = n_intervals
+        self.identity_scale_factor = identity_scale_factor
+        self._compute(np_scores)
+
+    def _compute(self, np_scores):
+        h = 1 / self.n_intervals
+        for idx in range(self.n_intervals):
+            f = np.sum((np_scores >= idx * h) & (np_scores < (idx + 1) * h))
+            logger.info(f"Found {f} pairs in range {idx * h} <= s < {(idx + 1) * h}")
+            self.weights = np.append(self.weights, [1 / f if f > 0. else 0.])
+        f = self.identity_scale_factor * np.sum(np_scores == 1.)
+        logger.info(f"Found {f} pairs for s == 1")
+        self.weights = np.append(self.weights, [1 / f if f > 0. else 0.])
+
+    def get_weight(self, score):
+        idx = math.floor(score[0] * self.n_intervals)
+        return self.weights[idx]
+
+
+class DualTmScoreWeight(TmScoreWeight):
+    MIN_THR = 0.5
+    MAX_THR = 0.7
+
+    def __init__(
+            self,
+            np_scores,
+            n_intervals=5,
+            identity_scale_factor=1.
+    ):
+        super().__init__(np_scores, n_intervals, identity_scale_factor)
+
+    def _compute(self, np_scores):
+        super()._compute(np_scores[:, 0])
+        self.local_similarity_f = 1 / len(np.where((np_scores[:, 0] < self.MIN_THR) & (np_scores[:, 1] >= self.MAX_THR))[0])
+
+    def get_weight(self, score):
+        if score[0] < self.MIN_THR and score[1] >= self.MAX_THR:
+            return self.local_similarity_f
+        return super().get_weight(score)
+
+
+def tm_score_weights(n_intervals, identity_scale_factor, score_weight=TmScoreWeight):
     def __tm_score_weights(np_scores):
-        class_weights = TmScoreWeight(np_scores, n_intervals, identity_scale_factor)
+        class_weights = score_weight(np_scores, n_intervals, identity_scale_factor)
         return torch.tensor(
-            np.vectorize(class_weights.get_weight)(np_scores)
+            np.apply_along_axis(class_weights.get_weight, 1, np_scores)
         )
     return __tm_score_weights
 
@@ -42,30 +92,3 @@ def fraction_score_of(f=10):
         return round(f * score) / f
     return __fraction_score
 
-
-class TmScoreWeight:
-
-    def __init__(
-            self,
-            np_scores,
-            n_intervals=5,
-            identity_scale_factor=1.
-    ):
-        self.weights = np.array([])
-        self.n_intervals = n_intervals
-        self.identity_scale_factor = identity_scale_factor
-        self.__compute(np_scores)
-
-    def __compute(self, np_scores):
-        h = 1 / self.n_intervals
-        for idx in range(self.n_intervals):
-            f = np.sum((np_scores >= idx * h) & (np_scores < (idx + 1) * h))
-            logger.info(f"Found {f} pairs in range {idx * h} <= s < {(idx + 1) * h}")
-            self.weights = np.append(self.weights, [1 / f if f > 0. else 0.])
-        f = self.identity_scale_factor * np.sum(np_scores == 1.)
-        logger.info(f"Found {f} pairs for s == 1")
-        self.weights = np.append(self.weights, [1 / f if f > 0. else 0.])
-
-    def get_weight(self, score):
-        idx = math.floor(score * self.n_intervals)
-        return self.weights[idx]

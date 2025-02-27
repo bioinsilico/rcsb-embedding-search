@@ -54,7 +54,9 @@ class TmScoreFromEmbeddingsDataset(Dataset):
         logger.info(f"Total embeddings: {len(self.embedding)}")
 
     def weights(self):
-        return self.weighting_method(self.class_pairs['score'].to_numpy())
+        return self.weighting_method(
+            np.expand_dims(self.class_pairs['score'].to_numpy(), axis=1)
+        )
 
     def __len__(self):
         return len(self.class_pairs)
