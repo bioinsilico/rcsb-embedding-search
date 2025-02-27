@@ -48,7 +48,9 @@ class DualTmScoreWeight(TmScoreWeight):
 
     def _compute(self, np_scores):
         super()._compute(np_scores[:, 0])
-        self.local_similarity_f = 1 / len(np.where((np_scores[:, 0] < self.MIN_THR) & (np_scores[:, 1] >= self.MAX_THR))[0])
+        f = len(np.where((np_scores[:, 0] < self.MIN_THR) & (np_scores[:, 1] >= self.MAX_THR))[0])
+        logger.info(f"Found {f} pairs with s < {self.MAX_THR} & s >= {self.MAX_THR}")
+        self.local_similarity_f = 1 / f
 
     def get_weight(self, score):
         if score[0] < self.MIN_THR and score[1] >= self.MAX_THR:
