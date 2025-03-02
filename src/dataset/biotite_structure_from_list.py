@@ -38,13 +38,15 @@ class BiotiteStructureFromList(Dataset):
 
     def __getitem__(self, idx):
         acc = self.rcsb_pd.loc[idx, 'rcsb_id']
+        asym_id = acc.split(".")[1] if "." in acc else "A"
         file_stream = stringio_from_url(self.build_url(acc))
         cif_file = CIFFile.read(file_stream)
         structure = get_structure(
             cif_file,
+            use_author_fields=False,
             model=1
         )
-        structure = structure[structure.chain_id == "A"]
+        structure = structure[structure.chain_id == asym_id]
         for atom_ch in chain_iter(structure):
             atom_res = atom_ch[filter_amino_acids(atom_ch)]
             if len(atom_res) == 0 or len(get_residues(atom_res)[0]) < 10:
