@@ -30,7 +30,9 @@ def main(cfg: TrainingConfig):
     training_set = TmScoreFromEmbeddingsDataset(
         tm_score_file=cfg.training_set.tm_score_file,
         embedding_path=cfg.training_set.data_path,
-        score_method=fraction_score_of(f=100),
+        score_method=fraction_score_of(
+            f=cfg.metadata.fraction_score if cfg.metadata is not None and cfg.metadata.fraction_score is not None else 10
+        ),
         weighting_method=tm_score_weights(5, 0.25)
     )
 
