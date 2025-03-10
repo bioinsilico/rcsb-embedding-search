@@ -30,7 +30,7 @@ class InferenceConfig:
     embedding_network: Any = MISSING
     inference_set: EmbeddingDataset = MISSING
     inference_writer: InferenceWriter = MISSING
-    metadata: Any
+    metadata: Optional[Any] = None
 
 
 @dataclass
