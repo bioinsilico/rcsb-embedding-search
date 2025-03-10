@@ -18,7 +18,7 @@ class TrainingConfig:
     training_parameters: TrainingParameters = MISSING
     network_parameters: NetworkParams = MISSING
     embedding_network: Any = MISSING
-    metadata: Optional[Any]
+    metadata: Optional[Any] = None
 
 
 @dataclass
