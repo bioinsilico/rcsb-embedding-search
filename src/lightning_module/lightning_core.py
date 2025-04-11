@@ -4,7 +4,7 @@ from omegaconf import OmegaConf
 from torch import nn, optim, cat
 from torcheval.metrics.functional import binary_auprc, binary_auroc
 from config.schema_config import TrainingConfig
-from src.lightning_module.utils import get_cosine_schedule_with_warmup
+from lightning_module.utils import get_cosine_schedule_with_warmup
 
 
 class LitStructureCore(L.LightningModule):
