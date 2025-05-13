@@ -7,8 +7,8 @@ from typing import Optional, Any
 
 @dataclass
 class LoggerConfig:
-    save_dir: str = "lightning_logs"
-    name: str = "embedding_logs"
+    save_dir: str = MISSING
+    name: str = MISSING
 
 
 @dataclass
@@ -23,8 +23,8 @@ class TrainingConfig:
     training_parameters: TrainingParameters = MISSING
     network_parameters: NetworkParams = MISSING
     embedding_network: Any = MISSING
+    logger: LoggerConfig = MISSING
     metadata: Optional[Any] = None
-    logger: LoggerConfig = LoggerConfig()
 
 
 @dataclass

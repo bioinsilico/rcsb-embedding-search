@@ -8,8 +8,8 @@ checkpoint: null
 default_root_dir: null
 
 logger:
-  save_dir: lightning_logs
-  name: embedding_logs
+  save_dir: ???
+  name: ???
 
 training_set: ???
 validation_set: ???
