@@ -17,10 +17,12 @@ from dataset.utils.tools import collate_fn
 from lightning_module.training.embedding_training import LitEmbeddingTraining
 
 from config.schema_config import TrainingConfig
-
+from lightning.pytorch.loggers import TensorBoardLogger
 cs = ConfigStore.instance()
 cs.store(name="training_default", node=TrainingConfig)
 logger = logging.getLogger(__name__)
+
+
 
 
 @hydra.main(version_base=None, config_path="../../config", config_name="training_config")
@@ -85,6 +87,11 @@ def main(cfg: TrainingConfig):
         logging_interval='step'
     )
 
+    logger_tb = TensorBoardLogger(
+    save_dir=cfg.logger.save_dir,
+    name=cfg.logger.name
+    )   
+
     trainer = L.Trainer(
         max_epochs=cfg.training_parameters.epochs,
         check_val_every_n_epoch=cfg.training_parameters.check_val_every_n_epoch,
@@ -93,7 +100,8 @@ def main(cfg: TrainingConfig):
         strategy=cfg.computing_resources.strategy,
         callbacks=[checkpoint_callback, lr_monitor],
         plugins=[SLURMEnvironment(requeue_signal=signal.SIGUSR1)],
-        default_root_dir=cfg.default_root_dir
+        default_root_dir=cfg.default_root_dir,
+        logger= logger_tb
     )
     trainer.fit(
         model,

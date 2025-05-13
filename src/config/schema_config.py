@@ -5,6 +5,11 @@ from enum import Enum
 from pathlib import Path
 from typing import Optional, Any
 
+@dataclass
+class LoggerConfig:
+    save_dir: str = "lightning_logs"
+    name: str = "embedding_logs"
+
 
 @dataclass
 class TrainingConfig:
@@ -19,6 +24,7 @@ class TrainingConfig:
     network_parameters: NetworkParams = MISSING
     embedding_network: Any = MISSING
     metadata: Optional[Any] = None
+    logger: LoggerConfig = LoggerConfig()
 
 
 @dataclass
