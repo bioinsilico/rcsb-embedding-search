@@ -5,11 +5,6 @@ from enum import Enum
 from pathlib import Path
 from typing import Optional, Any
 
-@dataclass
-class LoggerConfig:
-    save_dir: str = MISSING
-    name: str = MISSING
-
 
 @dataclass
 class TrainingConfig:
@@ -92,6 +87,12 @@ class ComputingResources:
     devices: int = MISSING
     strategy: Strategy = MISSING
     nodes: int = 1
+
+
+@dataclass
+class LoggerConfig:
+    save_dir: str = MISSING
+    name: str = MISSING
 
 
 @dataclass

@@ -18,10 +18,11 @@ from lightning_module.training.embedding_training import LitEmbeddingTraining
 
 from config.schema_config import TrainingConfig
 from lightning.pytorch.loggers import TensorBoardLogger
+
+
 cs = ConfigStore.instance()
 cs.store(name="training_default", node=TrainingConfig)
 logger = logging.getLogger(__name__)
-
 
 
 
