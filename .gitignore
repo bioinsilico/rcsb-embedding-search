@@ -8,3 +8,5 @@
 !/config/training_config.yaml
 !/config/inference_config.yaml
 !/config/core_config.yaml
+__pycache__/
+*.pyc

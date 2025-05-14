@@ -18,6 +18,7 @@ class TrainingConfig:
     training_parameters: TrainingParameters = MISSING
     network_parameters: NetworkParams = MISSING
     embedding_network: Any = MISSING
+    logger: LoggerConfig = MISSING
     metadata: Optional[Any] = None
 
 
@@ -86,6 +87,12 @@ class ComputingResources:
     devices: int = MISSING
     strategy: Strategy = MISSING
     nodes: int = 1
+
+
+@dataclass
+class LoggerConfig:
+    save_dir: str = MISSING
+    name: str = MISSING
 
 
 @dataclass
