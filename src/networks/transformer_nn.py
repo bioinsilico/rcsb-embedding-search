@@ -24,7 +24,6 @@ class LinearEmbeddingCosine(nn.Module):
     def get_weights(self):
         return [(name, param) for name, param in self.embedding.named_parameters()]
 
-
 class TransformerEmbeddingCosine(nn.Module):
     dropout = 0.1
 
@@ -54,16 +53,22 @@ class TransformerEmbeddingCosine(nn.Module):
                 ('activation', nn.ReLU())
             ]))
         else:
-            res_block = OrderedDict([(
-                f'block{i}',
-                ResBlock(input_features, hidden_layer, self.dropout)
-            ) for i in range(res_block_layers)])
+            res_block = OrderedDict()
+            in_dim = input_features
+
+            for out_dim, count in res_block_layers:
+                for i, _ in enumerate(range(count)):
+                    res_block[f'block{i}'] = ResBlock(in_dim, out_dim, self.dropout)
+                    in_dim = out_dim
+
             res_block.update([
                 ('dropout', nn.Dropout(p=self.dropout)),
-                ('linear', nn.Linear(input_features, hidden_layer)),
+                ('linear', nn.Linear(in_dim, in_dim)),
                 ('activation', nn.ReLU())
             ])
+
             self.embedding = nn.Sequential(res_block)
+            self.output_features = in_dim  
 
     def embedding_pooling(self, x, x_mask):
         return self.embedding(self.transformer(x, src_key_padding_mask=x_mask).sum(dim=1))
