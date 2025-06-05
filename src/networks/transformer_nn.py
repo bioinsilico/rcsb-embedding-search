@@ -2,6 +2,7 @@ import torch.nn as nn
 from collections import OrderedDict
 
 from networks.layers import ResBlock
+from typing import Optional, List
 
 
 class LinearEmbeddingCosine(nn.Module):
@@ -34,7 +35,7 @@ class TransformerEmbeddingCosine(nn.Module):
         hidden_layer=640,
         nhead=10,
         num_layers=6,
-        res_block_layers=0
+        res_block_layers:Optional[List[List[int]]] = None
     ):
         super().__init__()
         encoder_layer = nn.TransformerEncoderLayer(
@@ -45,7 +46,7 @@ class TransformerEmbeddingCosine(nn.Module):
             batch_first=True
         )
         self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
-        if res_block_layers == 0:
+        if not res_block_layers:
             self.embedding = nn.Sequential(OrderedDict([
                 ('norm', nn.LayerNorm(input_features)),
                 ('dropout', nn.Dropout(p=self.dropout)),
@@ -56,10 +57,12 @@ class TransformerEmbeddingCosine(nn.Module):
             res_block = OrderedDict()
             in_dim = input_features
 
-            for out_dim, count in res_block_layers:
-                for i, _ in enumerate(range(count)):
-                    res_block[f'block{i}'] = ResBlock(in_dim, out_dim, self.dropout)
+            block_idx = 0
+            for idx, (out_dim, count) in enumerate(res_block_layers):
+                for _ in range(count):
+                    res_block[f'block{block_idx}'] = ResBlock(in_dim, out_dim, self.dropout)
                     in_dim = out_dim
+                    block_idx += 1
 
             res_block.update([
                 ('dropout', nn.Dropout(p=self.dropout)),
@@ -69,6 +72,8 @@ class TransformerEmbeddingCosine(nn.Module):
 
             self.embedding = nn.Sequential(res_block)
             self.output_features = in_dim  
+        
+        self.print_architecture()
 
     def embedding_pooling(self, x, x_mask):
         return self.embedding(self.transformer(x, src_key_padding_mask=x_mask).sum(dim=1))
@@ -81,3 +86,30 @@ class TransformerEmbeddingCosine(nn.Module):
 
     def get_weights(self):
         return [(name, param) for name, param in self.embedding.named_parameters()]
+    
+    def print_architecture(self):
+        print("\nEmbedding Architecture:")
+        prev_dim = None
+
+        for name, module in self.embedding.named_modules():
+            if isinstance(module, ResBlock):
+                try:
+                    in_dim = module.block[1].in_features
+                    out_dim = module.block[-1].out_features
+                    res_type = "Identity" if isinstance(module.residual, nn.Identity) else "Linear"
+                    print(f"  {name}: ResBlock({in_dim} → {out_dim}), Residual: {res_type}")
+                    prev_dim = out_dim
+                except Exception as e:
+                    print(f"  {name}: ResBlock (error reading dims: {e})")
+            elif isinstance(module, nn.Linear) and name == "linear":
+                print(f"  {name}: Final Linear({prev_dim} → {module.out_features})")
+                prev_dim = module.out_features
+            elif isinstance(module, nn.Dropout):
+                print(f"  {name}: Dropout(p={module.p})")
+            elif isinstance(module, nn.ReLU):
+                print(f"  {name}: ReLU")
+            elif isinstance(module, nn.LayerNorm):
+                print(f"  {name}: LayerNorm({module.normalized_shape})")
+
+        print()
+
