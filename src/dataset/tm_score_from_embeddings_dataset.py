@@ -24,21 +24,22 @@ class TmScoreFromEmbeddingsDataset(Dataset):
             tm_score_file,
             embedding_path,
             score_method=None,
-            weighting_method=None
+            weighting_method=None,
+            exclude_domains_file=None
     ):
         self.embedding = pd.DataFrame()
         self.class_pairs = pd.DataFrame()
         self.score_method = binary_score(self.BINARY_THR) if not score_method else score_method
         self.weighting_method = binary_weights(self.BINARY_THR) if not weighting_method else weighting_method
-        self.__exec(tm_score_file, embedding_path)
+        self.__exec(tm_score_file, embedding_path, exclude_domains_file)
 
-    def __exec(self, tm_score_file, embedding_path):
-        self.load_class_pairs(tm_score_file)
+    def __exec(self, tm_score_file, embedding_path, exclude_domains_file=None):
+        self.load_class_pairs(tm_score_file, _exclude_domains(exclude_domains_file))
         self.load_embedding(embedding_path)
 
-    def load_class_pairs(self, tm_score_file):
+    def load_class_pairs(self, tm_score_file, filter_domains=None):
         logger.info(f"Loading pairs from file {tm_score_file}")
-        self.class_pairs = load_class_pairs(tm_score_file)
+        self.class_pairs = load_class_pairs(tm_score_file, filter_domains)
         logger.info(f"Total pairs: {len(self.class_pairs)}")
 
     def load_embedding(self, embedding_path):
@@ -77,6 +78,12 @@ class TmScoreFromEmbeddingsDataset(Dataset):
                 np.array(self.score_method(self.class_pairs.loc[idx, 'score']), dtype=d_type)
             )
         )
+
+def _exclude_domains(self, exclude_domains_file=None):
+    if exclude_domains_file is None:
+        return None
+    with open(exclude_domains_file, 'r') as f:
+        return [line.strip() for line in f]
 
 
 if __name__ == '__main__':

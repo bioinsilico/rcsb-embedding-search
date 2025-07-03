@@ -36,7 +36,8 @@ def main(cfg: TrainingConfig):
         score_method=fraction_score_of(
             f=cfg.metadata.fraction_score if cfg.metadata is not None and cfg.metadata.fraction_score is not None else 10
         ),
-        weighting_method=tm_score_weights(5, 0.25)
+        weighting_method=tm_score_weights(5, 0.25),
+        exclude_domains_file=cfg.metadata.exclude_domains_file if cfg.metadata is not None else None
     )
 
     weights = training_set.weights()

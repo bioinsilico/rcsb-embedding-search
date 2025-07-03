@@ -18,19 +18,24 @@ def load_classes(class_file):
     )
 
 
-def load_class_pairs(tm_score_file):
+def load_class_pairs(tm_score_file, filter_domains=None):
     dtype = {
         'domain_i': 'str',
         'domain_j': 'str',
         'score': 'float32'
     }
-    return pd.read_csv(
+    df = pd.read_csv(
         tm_score_file,
         header=None,
         index_col=None,
         names=['domain_i', 'domain_j', 'score'],
         dtype=dtype
     )
+
+    if filter_domains is not None:
+        df = df[~df['domain_i'].isin(filter_domains) & ~df['domain_j'].isin(filter_domains)]
+
+    return df
 
 
 def load_dual_pairs(tm_score_file):
@@ -80,9 +85,8 @@ def load_class_pairs_with_self_comparison(tm_score_file):
 
 def load_tensors(tensor_path, tm_score_file):
     dtype = {
-        'domain_i': 'str',
-        'domain_j': 'str',
-        'score': 'float32'
+        'domain': 'str',
+        'embedding': 'str'
     }
     df = pd.read_csv(
         tm_score_file,
@@ -93,8 +97,7 @@ def load_tensors(tensor_path, tm_score_file):
     return pd.DataFrame(
         data=[
             (dom_id, os.path.join(tensor_path, f"{dom_id}.pt")) for dom_id in pd.concat([df["domain_i"], df["domain_j"]]).unique()
-        ],
-        names=['domain', 'embedding'],
+        ]
     )
 
 
