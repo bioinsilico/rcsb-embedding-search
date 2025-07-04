@@ -34,10 +34,10 @@ def main(cfg: TrainingConfig):
         tm_score_file=cfg.training_set.tm_score_file,
         embedding_path=cfg.training_set.data_path,
         score_method=fraction_score_of(
-            f=cfg.metadata.fraction_score if cfg.metadata is not None and hasattr(cfg.metadata, 'fraction_score') is not None else 10
+            f=cfg.metadata.fraction_score if cfg.metadata is not None and 'fraction_score' in cfg.metadata else 10
         ),
         weighting_method=tm_score_weights(5, 0.25),
-        exclude_domains_file=cfg.metadata.exclude_domains_fileif if cfg.metadata is not None and hasattr(cfg.metadata, 'exclude_domains_file') is not None else None
+        exclude_domains_file=cfg.metadata.exclude_domains_file if cfg.metadata is not None and 'exclude_domains_file' in cfg.metadata else None
     )
 
     weights = training_set.weights()
