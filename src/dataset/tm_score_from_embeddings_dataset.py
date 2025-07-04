@@ -79,7 +79,7 @@ class TmScoreFromEmbeddingsDataset(Dataset):
             )
         )
 
-def _exclude_domains(self, exclude_domains_file=None):
+def _exclude_domains(exclude_domains_file=None):
     if exclude_domains_file is None:
         return None
     with open(exclude_domains_file, 'r') as f:
