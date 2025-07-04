@@ -90,8 +90,8 @@ def main(cfg: TrainingConfig):
     )
 
     logger_tb = TensorBoardLogger(
-    save_dir=cfg.logger.save_dir,
-    name=cfg.logger.name
+        save_dir=cfg.logger.save_dir,
+        name=cfg.logger.name
     )   
 
     trainer = L.Trainer(
