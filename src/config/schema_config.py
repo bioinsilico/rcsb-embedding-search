@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, MISSING
 from enum import Enum
 from pathlib import Path
@@ -92,8 +91,8 @@ class ComputingResources:
 
 @dataclass
 class LoggerConfig:
-    save_dir: Optional[str] = os.getcwd()
-    name: Optional[str] = 'lightning_logs'
+    save_dir: str = MISSING
+    name: str = MISSING
 
 
 @dataclass
