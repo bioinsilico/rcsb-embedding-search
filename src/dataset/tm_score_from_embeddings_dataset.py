@@ -63,11 +63,11 @@ class TmScoreFromEmbeddingsDataset(Dataset):
         return len(self.class_pairs)
 
     def __getitem__(self, idx):
-        domain_i = self.class_pairs.loc[idx, 'domain_i']
+        domain_i = self.class_pairs.iloc[idx]['domain_i']
         row_i = self.embedding.loc[self.embedding['domain'] == domain_i]
         embedding_i = row_i['embedding'].values[0]
 
-        domain_j = self.class_pairs.loc[idx, 'domain_j']
+        domain_j = self.class_pairs.iloc[idx]['domain_j']
         row_j = self.embedding.loc[self.embedding['domain'] == domain_j]
         embedding_j = row_j['embedding'].values[0]
 
@@ -75,7 +75,7 @@ class TmScoreFromEmbeddingsDataset(Dataset):
             torch.load(embedding_i),
             torch.load(embedding_j),
             torch.from_numpy(
-                np.array(self.score_method(self.class_pairs.loc[idx, 'score']), dtype=d_type)
+                np.array(self.score_method(self.class_pairs.iloc[idx]['score']), dtype=d_type)
             )
         )
 
