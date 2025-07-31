@@ -10,7 +10,7 @@ import torch
 from biotite.structure import filter_amino_acids, array
 from biotite.structure.io.pdbx import CIFFile, get_structure
 
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import  DataLoader
 
 from esm.utils.structure.protein_chain import ProteinChain
 from esm.models.esm3 import ESM3
@@ -54,6 +54,10 @@ if __name__ == '__main__':
 
     for s in os.listdir(args.pdb_path):
         src_structure = f"{args.pdb_path}/{s}"
+        if os.path.isfile(f"{args.out_path}/{s.replace('.cif', '.pt')}"):
+            logger.info(f"{s} is ready")
+            continue
+        logger.info(f"Processing {s}")
         cif_file = CIFFile.read(src_structure)
         protein_chain = get_structure(
             cif_file,
