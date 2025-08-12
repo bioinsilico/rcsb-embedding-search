@@ -34,7 +34,7 @@ if __name__ == '__main__':
         batch_size=1
     )
 
-    model: ESM3InferenceClient = ESM3.from_pretrained(ESM3_OPEN_SMALL, torch.device('cpu'))
+    model: ESM3InferenceClient = ESM3.from_pretrained(ESM3_OPEN_SMALL)
 
     for s in dataloader:
         pdb_file = s[1][0]
