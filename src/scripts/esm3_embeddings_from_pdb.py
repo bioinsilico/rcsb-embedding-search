@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import argparse
 import logging
-import os
+
 
 import numpy as np
-import pandas as pd
 import torch
 
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
 
 from esm.utils.structure.protein_chain import ProteinChain
 from esm.models.esm3 import ESM3
@@ -38,7 +37,7 @@ if __name__ == '__main__':
         batch_size=1
     )
 
-    model: ESM3InferenceClient = ESM3.from_pretrained(ESM3_OPEN_SMALL, torch.device('cpu'))
+    model: ESM3InferenceClient = ESM3.from_pretrained(ESM3_OPEN_SMALL)
 
     for s in dataloader:
         pdb_file = s[1][0]
