@@ -24,10 +24,12 @@ if __name__ == '__main__':
     parser.add_argument('--pdb_path', type=str, required=True)
     parser.add_argument('--out_path', type=str, required=True)
     parser.add_argument('--device', type=str, default=None)
+    parser.add_argument('--list-file', type=str, default=None)
     args = parser.parse_args()
 
     dataset = EsmEmbeddingFromPdbDataset(
-        args.pdb_path
+        coords_path=args.pdb_path,
+        file_list_file=args.list_file
     )
 
     dataloader = DataLoader(
