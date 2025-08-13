@@ -26,6 +26,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--pdb_path', type=str, required=True)
     parser.add_argument('--out_path', type=str, required=True)
+    parser.add_argument('--device', type=str, default=None)
     args = parser.parse_args()
 
     dataset = EsmEmbeddingFromPdbDataset(
@@ -37,7 +38,7 @@ if __name__ == '__main__':
         batch_size=1
     )
 
-    model: ESM3InferenceClient = ESM3.from_pretrained(ESM3_OPEN_SMALL)
+    model: ESM3InferenceClient = ESM3.from_pretrained(ESM3_OPEN_SMALL, device=torch.device(args.device) if args.device is not None else None)
 
     for s in dataloader:
         pdb_file = s[1][0]
