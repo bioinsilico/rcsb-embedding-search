@@ -74,6 +74,8 @@ if __name__ == '__main__':
             )
             logger.info(f"{pdb_id}.{ch} {output.per_residue_embedding.shape}")
             assembly_ch.append(output.per_residue_embedding)
+        if len(assembly_ch) == 0:
+            continue
         assembly_embedding = torch.cat(assembly_ch, dim=0)
         logger.info(f"{pdb_id} {assembly_embedding.shape}")
         torch.save(
