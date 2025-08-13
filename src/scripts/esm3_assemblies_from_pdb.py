@@ -3,6 +3,7 @@ import logging
 import os.path
 from concurrent.futures import as_completed
 from concurrent.futures.process import ProcessPoolExecutor
+import multiprocessing as mp
 
 import torch
 from biotite.structure import get_chains, chain_iter, filter_amino_acids, get_residues
@@ -64,6 +65,10 @@ def compute_embedding(pdb_file, model):
 if __name__ == '__main__':
     import config.logging_config
 
+    # Use the 'spawn' start method to avoid CUDA re-initialization errors when
+    # using multiprocessing with GPUs.
+    mp.set_start_method("spawn", force=True)
+
     parser = argparse.ArgumentParser()
     parser.add_argument('--pdb_path', type=str, required=True)
     parser.add_argument('--out_path', type=str, required=True)
@@ -87,7 +92,11 @@ if __name__ == '__main__':
     else:
         models.append( ESM3.from_pretrained(ESM3_OPEN_SMALL, device=torch.device(args.device) ))
 
-    executor = ProcessPoolExecutor(max_workers=args.n_device if args.n_device is not None else 1)
+    ctx = mp.get_context("spawn")
+    executor = ProcessPoolExecutor(
+        max_workers=args.n_device if args.n_device is not None else 1,
+        mp_context=ctx,
+    )
     future_to_command = {}
     for idx, s in enumerate(dataloader):
         structure_file = s[1][0]
