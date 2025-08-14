@@ -12,7 +12,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     for e in os.listdir(args.embedding_path):
-        embedding = torch.load(f"{args.embedding_path}/{e}").mean(dim=0)
+        embedding = torch.load(f"{args.embedding_path}/{e}", map_location=torch.device('cpu')).mean(dim=0)
         pd.DataFrame(embedding.to('cpu').numpy()).to_csv(
             f"{args.out_path}/{e.replace('pt','csv')}",
             index=False,
