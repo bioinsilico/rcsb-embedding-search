@@ -21,10 +21,10 @@ from scripts.esm3_embeddings_from_cif import rename_atom_attr
 logger = logging.getLogger(__name__)
 
 
-def compute_embedding(pdb_file, model):
+def compute_embedding(pdb_file, model, out_path):
     pdb_id, ext = os.path.splitext(pdb_file)
     pdb_id = os.path.basename(pdb_id)
-    if os.path.isfile(f"{args.out_path}/{pdb_id}.pt"):
+    if os.path.isfile(f"{out_path}/{pdb_id}.pt"):
         print(f"{pdb_file} is ready")
         return
     print(f"Processing {pdb_file}")
@@ -59,7 +59,7 @@ def compute_embedding(pdb_file, model):
     logger.info(f"{pdb_id} {assembly_embedding.shape}")
     torch.save(
         torch.cat(assembly_ch, dim=0),
-        f"{args.out_path}/{pdb_id}.pt"
+        f"{out_path}/{pdb_id}.pt"
     )
 
 if __name__ == '__main__':
@@ -100,7 +100,7 @@ if __name__ == '__main__':
     future_to_command = {}
     for idx, s in enumerate(dataloader):
         structure_file = s[1][0]
-        key = executor.submit(compute_embedding, s[1][0], models[idx % len(models)])
+        key = executor.submit(compute_embedding, s[1][0], models[idx % len(models)], args.out_path)
         future_to_command[key] = structure_file
 
     for future in as_completed(future_to_command):
