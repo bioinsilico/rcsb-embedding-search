@@ -96,10 +96,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     coords_path = args.pdb_path
-    files = [(
-        dom_id[0:-4] if ".pdb" in dom_id or ".ent" in dom_id or ".cif" in dom_id else dom_id,
-        os.path.join(coords_path, f"{dom_id}")
-    ) for dom_id in os.listdir(coords_path)],
+    files = [ os.path.join(coords_path, f"{dom_id}") for dom_id in os.listdir(coords_path)]
 
     ngpu = args.n_device
     assert ngpu >= 1, "n-device must be >= 1"
