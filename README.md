@@ -7,7 +7,7 @@ Preprint: [Multi-scale structural similarity embedding search across entire prot
 
 A web application implementing this method is available at [rcsb-embedding-search](http://embedding-search.rcsb.org).
 
-If you are only interested in using the model, visit the [rcsb-embedding-model repository](https://github.com/rcsb/rcsb-embedding-model), which provides a minimal setup.
+If you are only interested in using the model for inference, visit the [rcsb-embedding-model repository](https://github.com/rcsb/rcsb-embedding-model), which provides a minimal setup.
 
 ---
 
