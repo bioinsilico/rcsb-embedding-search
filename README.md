@@ -9,6 +9,8 @@ A web application implementing this method is available at [rcsb-embedding-searc
 
 If you are only interested in using the model for inference, visit the [rcsb-embedding-model repository](https://github.com/rcsb/rcsb-embedding-model), which provides a minimal setup.
 
+Evaluation scripts are available [rcsb-embedding-evaluation](https://github.com/bioinsilico/rcsb-embedding-evaluation)
+
 ---
 
 ## Embedding Model
