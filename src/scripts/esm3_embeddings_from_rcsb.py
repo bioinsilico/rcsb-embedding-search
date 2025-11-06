@@ -31,7 +31,7 @@ def rename_atom_ch(atom_ch, ch = "A"):
 
 def compute_esm3_embeddings(model, pdb_id, out_path, failed_file):
     try:
-        rcsb_fetch = rcsb.fetch(pdb_id, "cif")
+        rcsb_fetch = rcsb.fetch(pdb_id, "bcif")
         bcif = BinaryCIFFile.read(rcsb_fetch)
         atom_array = get_structure(
             bcif,
