@@ -62,16 +62,16 @@ def compute_esm3_embeddings(model, pdb_id, out_path, failed_file):
             raise ValueError("Inconsistent chain ids")
         try:
             atom_ch = rename_atom_ch(atom_ch)
-            login_time = time.time()
+            login_time = time.perf_counter()
             protein_chain = ProteinChain.from_atomarray(atom_ch)
             protein = ESMProtein.from_protein_chain(protein_chain)
             protein_tensor = model.encode(protein)
             output = model.forward_and_sample(
                 protein_tensor, SamplingConfig(return_per_residue_embeddings=True)
             )
-            logout_time = time.time()
-            seconds = int((logout_time - login_time))
-            logger.info(f"{pdb_id}.{ch} {output.per_residue_embedding.shape} {seconds}s")
+            logout_time = time.perf_counter()
+            ms = (logout_time - login_time)*1000
+            logger.info(f"{pdb_id}.{ch} {output.per_residue_embedding.shape} {ms}")
             torch.save(
                 output.per_residue_embedding,
                 f"{out_path}/{pdb_id}.{ch}.pt"
