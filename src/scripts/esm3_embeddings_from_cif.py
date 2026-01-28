@@ -38,6 +38,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--pdb_path', type=str, required=True)
     parser.add_argument('--out_path', type=str, required=True)
+    parser.add_argument('--only_sequence', action='store_true')
     args = parser.parse_args()
 
     dataset = EsmEmbeddingFromPdbDataset(
@@ -67,7 +68,10 @@ if __name__ == '__main__':
         protein_chain = protein_chain[filter_amino_acids(protein_chain)]
         protein_chain = rename_atom_attr(protein_chain)
         protein_chain = ProteinChain.from_atomarray(protein_chain)
-        protein = ESMProtein.from_protein_chain(protein_chain)
+        if args.only_sequence:
+            protein = ESMProtein(sequence=protein_chain.sequence)
+        else:
+            protein = ESMProtein.from_protein_chain(protein_chain)
         protein_tensor = model.encode(protein)
         output = model.forward_and_sample(
             protein_tensor, SamplingConfig(return_per_residue_embeddings=True)
