@@ -26,6 +26,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--pdb_path', type=str, required=True)
     parser.add_argument('--out_path', type=str, required=True)
+    parser.add_argument('--only_sequence', action='store_true')
     parser.add_argument('--device', type=str, default=None)
     args = parser.parse_args()
 
@@ -43,7 +44,10 @@ if __name__ == '__main__':
     for s in dataloader:
         pdb_file = s[1][0]
         protein_chain = ProteinChain.from_pdb(pdb_file)
-        protein = ESMProtein.from_protein_chain(protein_chain)
+        if args.only_sequence:
+            protein = ESMProtein(sequence=protein_chain.sequence)
+        else:
+            protein = ESMProtein.from_protein_chain(protein_chain)
         protein_tensor = model.encode(protein)
         output = model.forward_and_sample(
             protein_tensor, SamplingConfig(return_per_residue_embeddings=True)
