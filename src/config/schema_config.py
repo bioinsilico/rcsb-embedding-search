@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, MISSING
 from enum import Enum
 from pathlib import Path
-from typing import Optional, Any
+from typing import Optional, Any, List
 
 
 @dataclass
@@ -41,6 +41,7 @@ class NetworkParams:
     num_layers: int = MISSING
     dim_feedforward: int = MISSING
     hidden_layer: int = MISSING
+    res_block_layers: List[List[int]] = MISSING
 
 
 @dataclass

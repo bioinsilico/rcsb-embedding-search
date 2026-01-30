@@ -19,6 +19,9 @@ from lightning_module.training.embedding_training import LitEmbeddingTraining
 from config.schema_config import TrainingConfig
 from lightning.pytorch.loggers import TensorBoardLogger
 
+# Use of high precision for matrix multiplication
+import torch
+torch.set_float32_matmul_precision('high')
 
 cs = ConfigStore.instance()
 cs.store(name="training_default", node=TrainingConfig)
