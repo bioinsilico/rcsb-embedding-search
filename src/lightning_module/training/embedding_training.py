@@ -10,8 +10,8 @@ class LitEmbeddingTraining(LitStructureCore):
             nn_model,
             learning_rate=1e-6,
             params=None,
-            cov_reg_weight=0.01,
-            norm_reg_weight=0.1
+            cov_reg_weight=1e-12,
+            norm_reg_weight=1e-7
     ):
         super().__init__(nn_model, learning_rate, params)
         self.cov_reg_weight = cov_reg_weight
