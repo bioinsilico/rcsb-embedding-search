@@ -1,7 +1,7 @@
 import torch.nn as nn
 from collections import OrderedDict
 
-from networks.layers import ResBlock
+from networks.layers import ResBlock, SineGaussianActivation
 
 
 class LinearEmbeddingCosine(nn.Module):
@@ -12,7 +12,7 @@ class LinearEmbeddingCosine(nn.Module):
             ('norm', nn.LayerNorm(input_features)),
             ('dropout', nn.Dropout(p=0.0)),
             ('linear', nn.Linear(input_features, hidden_layer)),
-            ('activation', nn.ReLU())
+            ('activation', SineGaussianActivation())
         ]))
 
     def forward(self, x, x_mask, y, y_mask):
@@ -51,7 +51,7 @@ class TransformerEmbeddingCosine(nn.Module):
                 ('norm', nn.LayerNorm(input_features)),
                 ('dropout', nn.Dropout(p=self.dropout)),
                 ('linear', nn.Linear(input_features, hidden_layer)),
-                ('activation', nn.ReLU())
+                ('activation', SineGaussianActivation())
             ]))
         else:
             res_block = OrderedDict([(
@@ -61,7 +61,7 @@ class TransformerEmbeddingCosine(nn.Module):
             res_block.update([
                 ('dropout', nn.Dropout(p=self.dropout)),
                 ('linear', nn.Linear(input_features, hidden_layer)),
-                ('activation', nn.ReLU())
+                ('activation', SineGaussianActivation())
             ])
             self.embedding = nn.Sequential(res_block)
 
