@@ -17,8 +17,8 @@ class LinearEmbeddingCosine(nn.Module):
 
     def forward(self, x, x_mask, y, y_mask):
         return nn.functional.cosine_similarity(
-            self.embedding(x.sum(dim=1)),
-            self.embedding(y.sum(dim=1))
+            self.embedding(x.mean(dim=1)),
+            self.embedding(y.mean(dim=1))
         )
 
     def get_weights(self):
@@ -66,7 +66,7 @@ class TransformerEmbeddingCosine(nn.Module):
             self.embedding = nn.Sequential(res_block)
 
     def embedding_pooling(self, x, x_mask):
-        return self.embedding(self.transformer(x, src_key_padding_mask=x_mask).sum(dim=1))
+        return self.embedding(self.transformer(x, src_key_padding_mask=x_mask).mean(dim=1))
 
     def forward(self, x, x_mask, y, y_mask):
         return nn.functional.cosine_similarity(
