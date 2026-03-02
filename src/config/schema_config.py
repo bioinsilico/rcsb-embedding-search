@@ -117,6 +117,7 @@ class LrInterval(str, Enum):
 class Strategy(str, Enum):
     auto = "auto"
     ddp = "ddp"
+    ddp_find_unused_parameters_true = "ddp_find_unused_parameters_true"
 
 
 class DataExtension(str, Enum):
