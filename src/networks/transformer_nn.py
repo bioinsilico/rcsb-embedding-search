@@ -91,6 +91,7 @@ class MoETransformerEmbeddingCosine(nn.Module):
         num_layers=6,
         num_experts=8,
         top_k=2,
+        load_balance_weight=0.01,
         res_block_layers=0
     ):
         super().__init__()
@@ -106,6 +107,7 @@ class MoETransformerEmbeddingCosine(nn.Module):
                     num_experts=num_experts,
                     top_k=top_k,
                     dropout=self.dropout,
+                    load_balance_weight=load_balance_weight,
                     batch_first=True
                 )
             )
@@ -143,6 +145,13 @@ class MoETransformerEmbeddingCosine(nn.Module):
             self.embedding_pooling(x, x_mask),
             self.embedding_pooling(y, y_mask)
         )
+
+    def get_load_balance_loss(self):
+        """Aggregate load balancing loss from all MoE layers."""
+        total_loss = 0.0
+        for layer in self.transformer:
+            total_loss += layer.moe.get_load_balance_loss()
+        return total_loss
 
     def get_weights(self):
         return [(name, param) for name, param in self.embedding.named_parameters()]
