@@ -68,6 +68,7 @@ class TMScoreDataset:
     data_augmenter: Any = None
     include_self_comparison: bool = False
     fraction_score: Optional[int] = 10
+    tm_score_intervals: Optional[int] = 5
 
 
 @dataclass
