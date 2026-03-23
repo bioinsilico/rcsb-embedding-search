@@ -3,7 +3,8 @@
 ## Overview
 This repository contains scripts to train a neural network model for protein structure search based on 3D structure embeddings.
 
-Preprint: [Multi-scale structural similarity embedding search across entire proteomes](https://www.biorxiv.org/content/10.1101/2025.02.28.640875v1).
+Reference: [Multi-scale structural similarity embedding search across entire proteomes](Segura, J., et al. (2026). *Multi-scale structural similarity embedding search across entire proteomes*. (https://doi.org/10.1093/bioinformatics/btag058)
+).
 
 A web application implementing this method is available at [rcsb-embedding-search](http://embedding-search.rcsb.org).
 
