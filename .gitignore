@@ -10,3 +10,4 @@
 !/config/core_config.yaml
 __pycache__/
 *.pyc
+/.claude
