@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import argparse
-import itertools
 import os
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor
 
 import biotite.sequence.align as align
 import biotite.structure.io.pdb as pdb
@@ -56,38 +55,67 @@ def collect_sequences(input_dir: str, fmt: str, ext: str | None = None) -> list[
     return records
 
 
-def _align_pair(args: tuple[str, str, str, str]) -> tuple[str, str, float]:
-    """Worker function: align a single pair and return (header_i, header_j, identity).
+def _align_rows(args: tuple[int, int, list[str], list[str]]) -> list[tuple[str, str, float]]:
+    """Worker function: align all pairs (i, j>i) for i in [i_start, i_end).
 
-    Sequences are passed as strings and reconstructed inside the worker so the
-    task is fully picklable across process boundaries.
+    Receives the full headers/seqs lists so it can generate its own pairs without
+    any per-pair IPC overhead. seq_i is constructed once per row.
     """
-    header_i, seq_str_i, header_j, seq_str_j = args
+    i_start, i_end, headers, seqs = args
     matrix = align.SubstitutionMatrix.std_protein_matrix()
-    try:
-        seq_i = ProteinSequence(seq_str_i)
-        seq_j = ProteinSequence(seq_str_j)
-        alignments = align.align_optimal(
-            seq_i,
-            seq_j,
-            matrix,
-            gap_penalty=(-10, -1),
-            terminal_penalty=False,
-        )
-        best = alignments[0]
-        trace = best.trace
-        if len(trace) == 0:
-            return header_i, header_j, 0.0
-        matches = sum(
-            1
-            for pos1, pos2 in trace
-            if pos1 != -1 and pos2 != -1 and seq_i[pos1] == seq_j[pos2]
-        )
-        identity = matches / len(trace)
-    except Exception as exc:
-        print(f"Warning: alignment failed for {header_i} vs {header_j}: {exc}")
-        identity = float("nan")
-    return header_i, header_j, identity
+    n = len(headers)
+    results: list[tuple[str, str, float]] = []
+    for i in range(i_start, i_end):
+        try:
+            seq_i = ProteinSequence(seqs[i])
+        except Exception as exc:
+            print(f"Warning: could not parse sequence {headers[i]}: {exc}")
+            for j in range(i + 1, n):
+                results.append((headers[i], headers[j], float("nan")))
+            continue
+        for j in range(i + 1, n):
+            try:
+                seq_j = ProteinSequence(seqs[j])
+                alignments = align.align_optimal(
+                    seq_i,
+                    seq_j,
+                    matrix,
+                    gap_penalty=(-10, -1),
+                    terminal_penalty=False,
+                )
+                trace = alignments[0].trace
+                if len(trace) == 0:
+                    identity = 0.0
+                else:
+                    matches = sum(
+                        1
+                        for pos1, pos2 in trace
+                        if pos1 != -1 and pos2 != -1 and seq_i[pos1] == seq_j[pos2]
+                    )
+                    identity = matches / len(trace)
+            except Exception as exc:
+                print(f"Warning: alignment failed for {headers[i]} vs {headers[j]}: {exc}")
+                identity = float("nan")
+            results.append((headers[i], headers[j], identity))
+    return results
+
+
+def _split_rows(n: int, workers: int) -> list[tuple[int, int]]:
+    """Split row indices into *workers* chunks with approximately equal pair counts."""
+    total = n * (n - 1) // 2
+    target = total / workers
+    chunks: list[tuple[int, int]] = []
+    start = 0
+    accumulated = 0
+    for i in range(n):
+        accumulated += n - 1 - i
+        if accumulated >= target and len(chunks) < workers - 1:
+            chunks.append((start, i + 1))
+            start = i + 1
+            accumulated = 0
+    if start < n:
+        chunks.append((start, n))
+    return chunks
 
 
 def run_pairwise_alignments(
@@ -95,24 +123,24 @@ def run_pairwise_alignments(
     workers: int,
 ) -> list[tuple[str, str, float]]:
     """Return (header1, header2, identity) for every unique pair using *workers* processes."""
-    tasks = [
-        (records[i][0], str(records[i][1]), records[j][0], str(records[j][1]))
-        for i, j in itertools.combinations(range(len(records)), 2)
-    ]
+    n = len(records)
+    n_pairs = n * (n - 1) // 2
+    headers = [r[0] for r in records]
+    seqs = [str(r[1]) for r in records]
 
-    print(f"Starting {len(tasks)} alignments with {workers} workers")
-    results: list[tuple[str, str, float]] = []
-    chunksize = max(1, len(tasks) // (workers * 4))
+    row_chunks = _split_rows(n, workers)
+    tasks = [(i_start, i_end, headers, seqs) for i_start, i_end in row_chunks]
+
+    print(f"Starting {n_pairs} alignments with {workers} workers ({len(tasks)} tasks)")
 
     with ProcessPoolExecutor(max_workers=workers) as executor:
-        futures = {executor.submit(_align_pair, task): task for task in tasks}
-        for future in tqdm(as_completed(futures), total=len(tasks), desc="Aligning pairs"):
-            results.append(future.result())
+        batch_results = list(tqdm(
+            executor.map(_align_rows, tasks),
+            total=len(tasks),
+            desc="Aligning pairs",
+        ))
 
-    # Sort to get a deterministic output order (same as combinations order)
-    order = {(records[i][0], records[j][0]): k for k, (i, j) in enumerate(itertools.combinations(range(len(records)), 2))}
-    results.sort(key=lambda r: order.get((r[0], r[1]), order.get((r[1], r[0]), 0)))
-    return results
+    return [result for batch in batch_results for result in batch]
 
 
 def main() -> None:
