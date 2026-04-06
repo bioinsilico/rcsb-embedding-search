@@ -32,7 +32,7 @@ class LitStructureCore(L.LightningModule):
         if self.cfg is not None and hasattr(self.logger.experiment, 'add_text'):
             self.logger.experiment.add_text(
                 "Config",
-                OmegaConf.to_yaml(self.cfg)
+                OmegaConf.to_yaml(OmegaConf.to_container(self.cfg, resolve=True))
             )
 
     def on_train_epoch_end(self):
