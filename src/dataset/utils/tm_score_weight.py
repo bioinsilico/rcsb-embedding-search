@@ -90,6 +90,7 @@ def fraction_score(score):
 
 
 def fraction_score_of(f=10):
+    logger.info(f"Using fraction score of {f}")
     def __fraction_score(score):
         return round(f * score) / f
     return __fraction_score
