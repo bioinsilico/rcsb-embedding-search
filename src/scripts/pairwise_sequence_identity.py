@@ -82,7 +82,7 @@ def _align_rows(args: tuple[int, int, list[str], list[str]]) -> list[tuple[str, 
                     matrix,
                     gap_penalty=(-10, -1),
                     terminal_penalty=False,
-                    local=True,
+                    local=False,
                 )
                 identity = align.get_sequence_identity(alignments[0])
             except Exception as exc:
