@@ -1,0 +1,194 @@
+import math
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+
+# Standard amino acid alphabet + special tokens
+AA_TOKENS = {
+    '<pad>': 0, '<bos>': 1, '<eos>': 2, '<unk>': 3,
+    'A': 4, 'R': 5, 'N': 6, 'D': 7, 'C': 8, 'E': 9, 'Q': 10,
+    'G': 11, 'H': 12, 'I': 13, 'L': 14, 'K': 15, 'M': 16, 'F': 17,
+    'P': 18, 'S': 19, 'T': 20, 'W': 21, 'Y': 22, 'V': 23, 'X': 24,
+    'B': 25, 'Z': 26, 'U': 27, 'O': 28,
+}
+AA_VOCAB_SIZE = len(AA_TOKENS)
+AA_PAD_IDX = AA_TOKENS['<pad>']
+
+
+def tokenize_sequence(seq: str) -> list[int]:
+    """Convert an amino acid string to a list of token indices (no BOS/EOS)."""
+    return [AA_TOKENS.get(aa, AA_TOKENS['<unk>']) for aa in seq]
+
+
+class SinusoidalPositionalEncoding(nn.Module):
+    """Fixed sinusoidal positional encoding added to token embeddings."""
+
+    def __init__(self, d_model: int, max_len: int = 4096, dropout: float = 0.1):
+        super().__init__()
+        self.dropout = nn.Dropout(p=dropout)
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(
+            torch.arange(0, d_model, 2, dtype=torch.float) * (-math.log(10000.0) / d_model)
+        )
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        self.register_buffer('pe', pe.unsqueeze(0))  # (1, max_len, d_model)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Add positional encoding to input tensor of shape (B, L, d_model)."""
+        return self.dropout(x + self.pe[:, :x.size(1)])
+
+
+class SequenceAutoencoder(nn.Module):
+    """Protein sequence autoencoder with similarity-preserving latent space.
+
+    The encoder maps a variable-length amino acid sequence to a fixed-size
+    L2-normalized latent vector.  The decoder reconstructs the sequence from
+    that vector.  Because the latent is unit-normalized, the dot product
+    between two latent vectors equals their cosine similarity, which is
+    trained to approximate pairwise sequence identity.
+
+    Architecture
+    ------------
+    Encoder:  AA embedding + positional encoding → TransformerEncoder
+              → mean pooling (masked) → linear projection → L2 normalize
+    Decoder:  latent → linear expansion to d_model → (1-token memory)
+              Positional queries → TransformerDecoder cross-attending to memory
+              → linear → vocab logits
+    """
+
+    dropout = 0.1
+
+    def __init__(
+        self,
+        d_model: int = 512,
+        latent_dim: int = 256,
+        nhead: int = 8,
+        num_encoder_layers: int = 6,
+        num_decoder_layers: int = 6,
+        dim_feedforward: int = 2048,
+        max_seq_len: int = 2048,
+        vocab_size: int = AA_VOCAB_SIZE,
+        pad_idx: int = AA_PAD_IDX,
+    ):
+        super().__init__()
+        self.d_model = d_model
+        self.latent_dim = latent_dim
+        self.pad_idx = pad_idx
+
+        # --- Shared layers ---
+        self.aa_embedding = nn.Embedding(vocab_size, d_model, padding_idx=pad_idx)
+        self.pos_encoding = SinusoidalPositionalEncoding(d_model, max_seq_len, self.dropout)
+
+        # --- Encoder ---
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=d_model,
+            nhead=nhead,
+            dim_feedforward=dim_feedforward,
+            dropout=self.dropout,
+            batch_first=True,
+        )
+        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_encoder_layers)
+        self.to_latent = nn.Sequential(
+            nn.LayerNorm(d_model),
+            nn.Linear(d_model, latent_dim),
+        )
+
+        # --- Decoder ---
+        self.from_latent = nn.Linear(latent_dim, d_model)
+        self.decoder_pos_encoding = SinusoidalPositionalEncoding(d_model, max_seq_len, self.dropout)
+        self.decoder_query_embed = nn.Embedding(vocab_size, d_model, padding_idx=pad_idx)
+        decoder_layer = nn.TransformerDecoderLayer(
+            d_model=d_model,
+            nhead=nhead,
+            dim_feedforward=dim_feedforward,
+            dropout=self.dropout,
+            batch_first=True,
+        )
+        self.decoder = nn.TransformerDecoder(decoder_layer, num_layers=num_decoder_layers)
+        self.output_proj = nn.Linear(d_model, vocab_size)
+
+    def _pad_mask(self, tokens: torch.Tensor) -> torch.Tensor:
+        """Boolean padding mask: True where token == pad_idx."""
+        return tokens == self.pad_idx
+
+    def encode(self, tokens: torch.Tensor) -> torch.Tensor:
+        """Encode token indices to an L2-normalized latent vector.
+
+        Args:
+            tokens: (B, L) long tensor of amino acid token indices.
+
+        Returns:
+            (B, latent_dim) unit-normalized embedding.
+        """
+        pad_mask = self._pad_mask(tokens)
+        x = self.pos_encoding(self.aa_embedding(tokens))
+        x = self.encoder(x, src_key_padding_mask=pad_mask)
+
+        # Mean pooling over non-padded positions
+        valid = (~pad_mask).unsqueeze(-1).float()  # (B, L, 1)
+        pooled = (x * valid).sum(dim=1) / valid.sum(dim=1).clamp(min=1)
+
+        latent = self.to_latent(pooled)
+        return F.normalize(latent, dim=-1)
+
+    def decode(self, latent: torch.Tensor, tokens: torch.Tensor) -> torch.Tensor:
+        """Decode latent vector back to per-position vocabulary logits.
+
+        Uses teacher forcing: the decoder receives the true input tokens
+        (shifted) so it can learn to reconstruct. At inference time one can
+        replace this with autoregressive sampling.
+
+        Args:
+            latent: (B, latent_dim) from :meth:`encode`.
+            tokens: (B, L) ground-truth token indices (teacher forcing).
+
+        Returns:
+            (B, L, vocab_size) logits over the amino acid vocabulary.
+        """
+        pad_mask = self._pad_mask(tokens)
+
+        # Memory: expand latent to a single-token sequence for cross-attention
+        memory = self.from_latent(latent).unsqueeze(1)  # (B, 1, d_model)
+
+        # Target queries: embed tokens + positional encoding
+        tgt = self.decoder_pos_encoding(self.decoder_query_embed(tokens))
+
+        out = self.decoder(
+            tgt,
+            memory,
+            tgt_key_padding_mask=pad_mask,
+        )
+        return self.output_proj(out)
+
+    def forward(
+        self,
+        tokens: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Full forward pass returning logits and latent embedding.
+
+        Args:
+            tokens: (B, L) amino acid token indices (padded).
+
+        Returns:
+            logits: (B, L, vocab_size) reconstruction logits.
+            latent: (B, latent_dim) L2-normalized embedding.
+        """
+        latent = self.encode(tokens)
+        logits = self.decode(latent, tokens)
+        return logits, latent
+
+    def embedding(self, tokens: torch.Tensor) -> torch.Tensor:
+        """Convenience alias for encode — returns the latent embedding."""
+        return self.encode(tokens)
+
+    def cosine_similarity(
+        self,
+        tokens_i: torch.Tensor,
+        tokens_j: torch.Tensor,
+    ) -> torch.Tensor:
+        """Cosine similarity between two sequences' latent embeddings."""
+        return F.cosine_similarity(self.encode(tokens_i), self.encode(tokens_j))
