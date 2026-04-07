@@ -82,17 +82,9 @@ def _align_rows(args: tuple[int, int, list[str], list[str]]) -> list[tuple[str, 
                     matrix,
                     gap_penalty=(-10, -1),
                     terminal_penalty=False,
+                    local=True,
                 )
-                trace = alignments[0].trace
-                if len(trace) == 0:
-                    identity = 0.0
-                else:
-                    matches = sum(
-                        1
-                        for pos1, pos2 in trace
-                        if pos1 != -1 and pos2 != -1 and seq_i[pos1] == seq_j[pos2]
-                    )
-                    identity = matches / len(trace)
+                identity = align.get_sequence_identity(alignments[0])
             except Exception as exc:
                 print(f"Warning: alignment failed for {headers[i]} vs {headers[j]}: {exc}")
                 identity = float("nan")
