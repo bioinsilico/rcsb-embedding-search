@@ -1,13 +1,14 @@
 import logging
 import signal
 
+import torch
 import hydra
 import lightning as L
 from hydra.core.config_store import ConfigStore
 from hydra.utils import instantiate
 from lightning import seed_everything
 from lightning.pytorch.plugins.environments import SLURMEnvironment
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 
 from config.schema_config import TrainingConfig
 from config.utils import get_config_path
@@ -55,12 +56,10 @@ def main(cfg: TrainingConfig):
         collate_fn=collate_sequence_pairs,
     )
 
-    validation_set = SequenceIdentityDataset(
-        fasta_file=cfg.validation_set.data_path,
-        identity_file=cfg.validation_set.tm_score_file,
-    )
+    val_size = cfg.metadata.validation_size if cfg.metadata is not None and 'validation_size' in cfg.metadata else len(training_set)
+    val_indices = torch.randperm(len(training_set))[:val_size].tolist()
     validation_dataloader = DataLoader(
-        dataset=validation_set,
+        dataset=Subset(training_set, val_indices),
         batch_size=cfg.validation_set.batch_size,
         num_workers=cfg.validation_set.workers,
         persistent_workers=True if cfg.validation_set.workers > 0 else False,
