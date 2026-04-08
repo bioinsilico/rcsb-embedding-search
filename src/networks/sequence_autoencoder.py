@@ -99,8 +99,9 @@ class SequenceAutoencoder(nn.Module):
 
         # --- Decoder ---
         self.from_latent = nn.Linear(latent_dim, d_model)
-        self.decoder_pos_encoding = SinusoidalPositionalEncoding(d_model, max_seq_len, self.dropout)
-        self.decoder_query_embed = nn.Embedding(vocab_size, d_model, padding_idx=pad_idx)
+        # Learned position queries — the only input the decoder needs at inference
+        # is the target length; no ground-truth tokens required.
+        self.decoder_queries = nn.Embedding(max_seq_len, d_model)
         decoder_layer = nn.TransformerDecoderLayer(
             d_model=d_model,
             nhead=nhead,
@@ -135,33 +136,31 @@ class SequenceAutoencoder(nn.Module):
         latent = self.to_latent(pooled)
         return F.normalize(latent, dim=-1)
 
-    def decode(self, latent: torch.Tensor, tokens: torch.Tensor) -> torch.Tensor:
-        """Decode latent vector back to per-position vocabulary logits.
+    def decode(self, latent: torch.Tensor, seq_len: int) -> torch.Tensor:
+        """Decode a latent vector into per-position vocabulary logits.
 
-        Uses teacher forcing: the decoder receives the true input tokens
-        (shifted) so it can learn to reconstruct. At inference time one can
-        replace this with autoregressive sampling.
+        Fully non-autoregressive: the decoder uses learned position queries
+        and cross-attends to the latent vector.  No ground-truth tokens are
+        needed, so the same call works identically during training and inference.
 
         Args:
-            latent: (B, latent_dim) from :meth:`encode`.
-            tokens: (B, L) ground-truth token indices (teacher forcing).
+            latent: (B, latent_dim) L2-normalized embedding from :meth:`encode`.
+            seq_len: number of positions to decode (typically the input length
+                     during training; a desired output length at inference).
 
         Returns:
-            (B, L, vocab_size) logits over the amino acid vocabulary.
+            (B, seq_len, vocab_size) logits over the amino acid vocabulary.
         """
-        pad_mask = self._pad_mask(tokens)
+        B = latent.size(0)
 
-        # Memory: expand latent to a single-token sequence for cross-attention
+        # Memory: the latent as a single-token sequence for cross-attention
         memory = self.from_latent(latent).unsqueeze(1)  # (B, 1, d_model)
 
-        # Target queries: embed tokens + positional encoding
-        tgt = self.decoder_pos_encoding(self.decoder_query_embed(tokens))
+        # Position queries: (B, seq_len, d_model) — no target tokens needed
+        positions = torch.arange(seq_len, device=latent.device)
+        tgt = self.decoder_queries(positions).unsqueeze(0).expand(B, -1, -1)
 
-        out = self.decoder(
-            tgt,
-            memory,
-            tgt_key_padding_mask=pad_mask,
-        )
+        out = self.decoder(tgt, memory)
         return self.output_proj(out)
 
     def forward(
@@ -178,7 +177,7 @@ class SequenceAutoencoder(nn.Module):
             latent: (B, latent_dim) L2-normalized embedding.
         """
         latent = self.encode(tokens)
-        logits = self.decode(latent, tokens)
+        logits = self.decode(latent, tokens.size(1))
         return logits, latent
 
     def embedding(self, tokens: torch.Tensor) -> torch.Tensor:
