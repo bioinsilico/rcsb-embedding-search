@@ -76,6 +76,7 @@ def _align_rows(args: tuple[int, int, list[str], list[str]]) -> list[tuple[str, 
         for j in range(i + 1, n):
             try:
                 seq_j = ProteinSequence(seqs[j])
+                n_seq = min(len(seq_i), len(seq_j))
                 alignments = align.align_optimal(
                     seq_i,
                     seq_j,
@@ -84,10 +85,18 @@ def _align_rows(args: tuple[int, int, list[str], list[str]]) -> list[tuple[str, 
                     terminal_penalty=False,
                     local=False,
                 )
-                identity = align.get_sequence_identity(alignments[0])
+                trace = alignments[0].trace
+                if len(trace) == 0:
+                    identity = 0.0
+                else:
+                    matches = sum(
+                        1
+                        for pos1, pos2 in trace
+                        if pos1 != -1 and pos2 != -1 and seq_i[pos1] == seq_j[pos2]
+                    )
+                    identity = matches / n_seq
             except Exception as exc:
-                print(f"Warning: alignment failed for {headers[i]} vs {headers[j]}: {exc}")
-                identity = float("nan")
+                raise(f"Warning: alignment failed for {headers[i]} vs {headers[j]}: {exc}")
             results.append((headers[i], headers[j], identity))
     return results
 
@@ -108,6 +117,39 @@ def _split_rows(n: int, workers: int) -> list[tuple[int, int]]:
     if start < n:
         chunks.append((start, n))
     return chunks
+
+
+def window_split(
+    records: list[tuple[str, ProteinSequence]],
+    window_size: int,
+    window_step: int,
+) -> list[tuple[str, ProteinSequence]]:
+    """Split each sequence into overlapping windows.
+
+    Each output header is ``original_header|start-end`` (1-based, inclusive).
+    Sequences shorter than *window_size* are emitted as a single window.
+    """
+    windowed: list[tuple[str, ProteinSequence]] = []
+    for header, sequence in records:
+        seq_str = str(sequence)
+        seq_len = len(seq_str)
+        if seq_len <= window_size:
+            padded = seq_str + "X" * (window_size - seq_len)
+            windowed.append((f"{header}|1-{seq_len}", ProteinSequence(padded)))
+            continue
+        for start in range(0, seq_len - window_size + 1, window_step):
+            end = start + window_size
+            windowed.append((
+                f"{header}|{start + 1}-{end}",
+                ProteinSequence(seq_str[start:end]),
+            ))
+        # include trailing fragment if the last window didn't reach the end
+        if end < seq_len:
+            windowed.append((
+                f"{header}|{seq_len - window_size + 1}-{seq_len}",
+                ProteinSequence(seq_str[seq_len - window_size:]),
+            ))
+    return windowed
 
 
 def run_pairwise_alignments(
@@ -170,11 +212,28 @@ def main() -> None:
             "Defaults to the extension implied by --format (.pdb or .cif)."
         ),
     )
+    parser.add_argument(
+        "--window-size", "-W", type=int, default=None,
+        help="Split sequences using a moving window of this size (residues). Disabled by default.",
+    )
+    parser.add_argument(
+        "--window-step", "-S", type=int, default=None,
+        help="Step size for the moving window (default: same as --window-size, i.e. non-overlapping).",
+    )
     args = parser.parse_args()
+
+    if args.window_step is not None and args.window_size is None:
+        parser.error("--window-step requires --window-size")
+    if args.window_size is not None and args.window_step is None:
+        args.window_step = args.window_size
 
     print(f"Collecting sequences from {args.structure_path} ...")
     records = collect_sequences(args.structure_path, args.format, args.extension)
     print(f"Found {len(records)} sequences")
+
+    if args.window_size is not None:
+        records = window_split(records, args.window_size, args.window_step)
+        print(f"After windowing ({args.window_size}/{args.window_step}): {len(records)} fragments")
 
     with open(args.fasta_output, "w") as fasta_file:
         for header, sequence in records:
