@@ -76,8 +76,7 @@ def _align_rows(args: tuple[int, int, list[str], list[str]]) -> list[tuple[str, 
         for j in range(i + 1, n):
             try:
                 seq_j = ProteinSequence(seqs[j])
-                if len(seq_i) != len(seq_j):
-                    raise ValueError(f"Sequence length mismatch: {len(seq_i)} != {len(seq_j)}")
+                n_seq = min(len(seq_i), len(seq_j))
                 alignments = align.align_optimal(
                     seq_i,
                     seq_j,
@@ -95,10 +94,9 @@ def _align_rows(args: tuple[int, int, list[str], list[str]]) -> list[tuple[str, 
                         for pos1, pos2 in trace
                         if pos1 != -1 and pos2 != -1 and seq_i[pos1] == seq_j[pos2]
                     )
-                    identity = matches / len(seq_i)
+                    identity = matches / n_seq
             except Exception as exc:
-                print(f"Warning: alignment failed for {headers[i]} vs {headers[j]}: {exc}")
-                identity = float("nan")
+                raise(f"Warning: alignment failed for {headers[i]} vs {headers[j]}: {exc}")
             results.append((headers[i], headers[j], identity))
     return results
 
