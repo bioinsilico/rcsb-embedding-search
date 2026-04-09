@@ -50,7 +50,7 @@ def collect_sequences(input_dir: str, fmt: str, ext: str | None = None) -> list[
             continue
 
         for sequence, start_idx in zip(sequences, chain_starts):
-            chain_id = atom_array.chain_id[start_idx]
+            chain_id = atom_array.chain_id[start_idx] or "0"
             records.append((f"{stem}|{chain_id}", sequence))
 
     return records
