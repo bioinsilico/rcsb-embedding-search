@@ -30,14 +30,15 @@ def main(cfg: TrainingConfig):
     logger.info(f"Using config file: {get_config_path()}")
     seed_everything(cfg.global_seed, workers=True)
 
+    meta = cfg.metadata or {}
     training_set = SequenceIdentityDataset(
         fasta_file=cfg.training_set.data_path,
         identity_file=cfg.training_set.tm_score_file,
-        score_method=fraction_score_of(
-            f=cfg.metadata.fraction_score if cfg.metadata is not None and 'fraction_score' in cfg.metadata else 10
-        ),
+        score_method=fraction_score_of(f=meta.get('fraction_score', 10)),
         weighting_method=tm_score_weights(cfg.training_set.tm_score_intervals, 1),
-        exclude_ids_file=cfg.metadata.exclude_domains_file if cfg.metadata is not None and 'exclude_domains_file' in cfg.metadata else None,
+        exclude_ids_file=meta.get('exclude_domains_file', None),
+        max_pairs=meta.get('max_pairs', None),
+        n_intervals=cfg.training_set.tm_score_intervals,
     )
 
     weights = training_set.weights()
