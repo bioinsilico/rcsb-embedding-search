@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import shutil
 from concurrent.futures import ProcessPoolExecutor
 
 import biotite.sequence.align as align
@@ -55,50 +56,53 @@ def collect_sequences(input_dir: str, fmt: str, ext: str | None = None) -> list[
     return records
 
 
-def _align_rows(args: tuple[int, int, list[str], list[str]]) -> list[tuple[str, str, float]]:
+def _align_rows(args: tuple[int, int, list[str], list[str], str]) -> int:
     """Worker function: align all pairs (i, j>i) for i in [i_start, i_end).
 
-    Receives the full headers/seqs lists so it can generate its own pairs without
-    any per-pair IPC overhead. seq_i is constructed once per row.
+    Writes results directly to *output_file* (no TSV header). Returns the number
+    of pairs written so the caller can report progress without loading results into memory.
     """
-    i_start, i_end, headers, seqs = args
+    i_start, i_end, headers, seqs, output_file = args
     matrix = align.SubstitutionMatrix.std_protein_matrix()
     n = len(headers)
-    results: list[tuple[str, str, float]] = []
-    for i in range(i_start, i_end):
-        try:
-            seq_i = ProteinSequence(seqs[i])
-        except Exception as exc:
-            print(f"Warning: could not parse sequence {headers[i]}: {exc}")
-            for j in range(i + 1, n):
-                results.append((headers[i], headers[j], float("nan")))
-            continue
-        for j in range(i + 1, n):
+    count = 0
+    with open(output_file, "w") as f:
+        for i in range(i_start, i_end):
             try:
-                seq_j = ProteinSequence(seqs[j])
-                n_seq = min(len(seq_i), len(seq_j))
-                alignments = align.align_optimal(
-                    seq_i,
-                    seq_j,
-                    matrix,
-                    gap_penalty=(-10, -1),
-                    terminal_penalty=False,
-                    local=False,
-                )
-                trace = alignments[0].trace
-                if len(trace) == 0:
-                    identity = 0.0
-                else:
-                    matches = sum(
-                        1
-                        for pos1, pos2 in trace
-                        if pos1 != -1 and pos2 != -1 and seq_i[pos1] == seq_j[pos2]
-                    )
-                    identity = matches / n_seq
+                seq_i = ProteinSequence(seqs[i])
             except Exception as exc:
-                raise(f"Warning: alignment failed for {headers[i]} vs {headers[j]}: {exc}")
-            results.append((headers[i], headers[j], identity))
-    return results
+                print(f"Warning: could not parse sequence {headers[i]}: {exc}")
+                for j in range(i + 1, n):
+                    f.write(f"{headers[i]}\t{headers[j]}\tnan\n")
+                    count += 1
+                continue
+            for j in range(i + 1, n):
+                try:
+                    seq_j = ProteinSequence(seqs[j])
+                    n_seq = min(len(seq_i), len(seq_j))
+                    alignments = align.align_optimal(
+                        seq_i,
+                        seq_j,
+                        matrix,
+                        gap_penalty=(-10, -1),
+                        terminal_penalty=False,
+                        local=False,
+                    )
+                    trace = alignments[0].trace
+                    if len(trace) == 0:
+                        identity = 0.0
+                    else:
+                        matches = sum(
+                            1
+                            for pos1, pos2 in trace
+                            if pos1 != -1 and pos2 != -1 and seq_i[pos1] == seq_j[pos2]
+                        )
+                        identity = matches / n_seq
+                except Exception as exc:
+                    raise RuntimeError(f"Alignment failed for {headers[i]} vs {headers[j]}") from exc
+                f.write(f"{headers[i]}\t{headers[j]}\t{identity:.4f}\n")
+                count += 1
+    return count
 
 
 def _split_rows(n: int, workers: int) -> list[tuple[int, int]]:
@@ -155,26 +159,45 @@ def window_split(
 def run_pairwise_alignments(
     records: list[tuple[str, ProteinSequence]],
     workers: int,
-) -> list[tuple[str, str, float]]:
-    """Return (header1, header2, identity) for every unique pair using *workers* processes."""
+    output_file: str,
+) -> None:
+    """Compute all pairwise alignments and write results to *output_file*.
+
+    Each worker writes to its own temporary file to avoid concurrent writes.
+    The temporary files are merged (with a TSV header) into *output_file* and
+    then deleted.
+    """
     n = len(records)
     n_pairs = n * (n - 1) // 2
     headers = [r[0] for r in records]
     seqs = [str(r[1]) for r in records]
 
     row_chunks = _split_rows(n, workers)
-    tasks = [(i_start, i_end, headers, seqs) for i_start, i_end in row_chunks]
+    base, ext = os.path.splitext(output_file)
+    worker_files = [f"{base}.worker_{idx}{ext}" for idx in range(len(row_chunks))]
+    tasks = [
+        (i_start, i_end, headers, seqs, wf)
+        for (i_start, i_end), wf in zip(row_chunks, worker_files)
+    ]
 
     print(f"Starting {n_pairs} alignments with {workers} workers ({len(tasks)} tasks)")
 
     with ProcessPoolExecutor(max_workers=workers) as executor:
-        batch_results = list(tqdm(
+        counts = list(tqdm(
             executor.map(_align_rows, tasks),
             total=len(tasks),
             desc="Aligning pairs",
         ))
 
-    return [result for batch in batch_results for result in batch]
+    print(f"Merging {len(worker_files)} worker files into {output_file} ...")
+    with open(output_file, "w") as out:
+        out.write("seq1\tseq2\tsequence_identity\n")
+        for wf in worker_files:
+            with open(wf) as f:
+                shutil.copyfileobj(f, out)
+            os.remove(wf)
+
+    print(f"Total pairs written: {sum(counts)}")
 
 
 def main() -> None:
@@ -242,12 +265,7 @@ def main() -> None:
 
     n_pairs = len(records) * (len(records) - 1) // 2
     print(f"Computing pairwise alignments ({n_pairs} pairs) using {args.workers} workers ...")
-    results = run_pairwise_alignments(records, args.workers)
-
-    with open(args.identity_output, "w") as tsv_file:
-        tsv_file.write("seq1\tseq2\tsequence_identity\n")
-        for header_i, header_j, identity in results:
-            tsv_file.write(f"{header_i}\t{header_j}\t{identity:.4f}\n")
+    run_pairwise_alignments(records, args.workers, args.identity_output)
     print(f"Pairwise identities written to {args.identity_output}")
 
 
