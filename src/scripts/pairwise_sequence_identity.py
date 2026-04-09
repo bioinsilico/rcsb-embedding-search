@@ -172,12 +172,13 @@ def run_pairwise_alignments(
     records: list[tuple[str, ProteinSequence]],
     workers: int,
     output_file: str,
+    tmp_dir: str | None = None,
 ) -> None:
     """Compute all pairwise alignments and write results to *output_file*.
 
     Each worker writes to its own temporary file to avoid concurrent writes.
-    The temporary files are merged (with a TSV header) into *output_file* and
-    then deleted.
+    Temporary files are placed in *tmp_dir* (defaults to the directory of *output_file*).
+    They are merged (with a TSV header) into *output_file* and then deleted.
     """
     n = len(records)
     n_pairs = n * (n - 1) // 2
@@ -185,8 +186,10 @@ def run_pairwise_alignments(
     seqs = [str(r[1]) for r in records]
 
     row_chunks = _split_rows(n, workers)
-    base, ext = os.path.splitext(output_file)
-    worker_files = [f"{base}.worker_{idx}{ext}" for idx in range(len(row_chunks))]
+    base_name = os.path.splitext(os.path.basename(output_file))[0]
+    ext = os.path.splitext(output_file)[1]
+    work_dir = tmp_dir if tmp_dir is not None else os.path.dirname(os.path.abspath(output_file))
+    worker_files = [os.path.join(work_dir, f"{base_name}.worker_{idx}{ext}") for idx in range(len(row_chunks))]
     tasks = [
         (i_start, i_end, headers, seqs, wf)
         for (i_start, i_end), wf in zip(row_chunks, worker_files)
@@ -248,6 +251,12 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--tmp-dir", "-t", default=None,
+        help=(
+            "Directory for per-worker temporary files (default: same directory as --identity-output)."
+        ),
+    )
+    parser.add_argument(
         "--window-size", "-W", type=int, default=None,
         help="Split sequences using a moving window of this size (residues). Disabled by default.",
     )
@@ -277,7 +286,7 @@ def main() -> None:
 
     n_pairs = len(records) * (len(records) - 1) // 2
     print(f"Computing pairwise alignments ({n_pairs} pairs) using {args.workers} workers ...")
-    run_pairwise_alignments(records, args.workers, args.identity_output)
+    run_pairwise_alignments(records, args.workers, args.identity_output, args.tmp_dir)
     print(f"Pairwise identities written to {args.identity_output}")
 
 
