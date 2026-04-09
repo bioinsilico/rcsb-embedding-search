@@ -56,16 +56,20 @@ def collect_sequences(input_dir: str, fmt: str, ext: str | None = None) -> list[
     return records
 
 
+_WRITE_BATCH_SIZE = 10_000
+
+
 def _align_rows(args: tuple[int, int, list[str], list[str], str]) -> int:
     """Worker function: align all pairs (i, j>i) for i in [i_start, i_end).
 
-    Writes results directly to *output_file* (no TSV header). Returns the number
-    of pairs written so the caller can report progress without loading results into memory.
+    Writes results to *output_file* in batches of *_WRITE_BATCH_SIZE* lines.
+    Returns the number of pairs written.
     """
     i_start, i_end, headers, seqs, output_file = args
     matrix = align.SubstitutionMatrix.std_protein_matrix()
     n = len(headers)
     count = 0
+    batch: list[str] = []
     with open(output_file, "w") as f:
         for i in range(i_start, i_end):
             try:
@@ -73,8 +77,11 @@ def _align_rows(args: tuple[int, int, list[str], list[str], str]) -> int:
             except Exception as exc:
                 print(f"Warning: could not parse sequence {headers[i]}: {exc}")
                 for j in range(i + 1, n):
-                    f.write(f"{headers[i]}\t{headers[j]}\tnan\n")
+                    batch.append(f"{headers[i]}\t{headers[j]}\tnan\n")
                     count += 1
+                    if len(batch) >= _WRITE_BATCH_SIZE:
+                        f.writelines(batch)
+                        batch.clear()
                 continue
             for j in range(i + 1, n):
                 try:
@@ -100,8 +107,13 @@ def _align_rows(args: tuple[int, int, list[str], list[str], str]) -> int:
                         identity = matches / n_seq
                 except Exception as exc:
                     raise RuntimeError(f"Alignment failed for {headers[i]} vs {headers[j]}") from exc
-                f.write(f"{headers[i]}\t{headers[j]}\t{identity:.4f}\n")
+                batch.append(f"{headers[i]}\t{headers[j]}\t{identity:.4f}\n")
                 count += 1
+                if len(batch) >= _WRITE_BATCH_SIZE:
+                    f.writelines(batch)
+                    batch.clear()
+        if batch:
+            f.writelines(batch)
     return count
 
 
