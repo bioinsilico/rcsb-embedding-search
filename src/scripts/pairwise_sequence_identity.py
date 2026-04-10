@@ -168,6 +168,121 @@ def window_split(
     return windowed
 
 
+def _align_cross_rows(args: tuple[int, int, list[str], list[str], list[str], list[str], str]) -> int:
+    """Worker function: align every sequence in [i_start, i_end) from set1 against all of set2.
+
+    Writes results to *output_file* in batches of *_WRITE_BATCH_SIZE* lines.
+    Returns the number of pairs written.
+    """
+    i_start, i_end, headers1, seqs1, headers2, seqs2, output_file = args
+    matrix = align.SubstitutionMatrix.std_protein_matrix()
+    count = 0
+    batch: list[str] = []
+    with open(output_file, "w") as f:
+        for i in range(i_start, i_end):
+            try:
+                seq_i = ProteinSequence(seqs1[i])
+            except Exception as exc:
+                print(f"Warning: could not parse sequence {headers1[i]}: {exc}")
+                for j in range(len(headers2)):
+                    batch.append(f"{headers1[i]}\t{headers2[j]}\tnan\n")
+                    count += 1
+                    if len(batch) >= _WRITE_BATCH_SIZE:
+                        f.writelines(batch)
+                        batch.clear()
+                continue
+            for j in range(len(headers2)):
+                try:
+                    seq_j = ProteinSequence(seqs2[j])
+                    n_seq = min(len(seq_i), len(seq_j))
+                    alignments = align.align_optimal(
+                        seq_i,
+                        seq_j,
+                        matrix,
+                        gap_penalty=(-10, -1),
+                        terminal_penalty=False,
+                        local=False,
+                    )
+                    trace = alignments[0].trace
+                    if len(trace) == 0:
+                        identity = 0.0
+                    else:
+                        matches = sum(
+                            1
+                            for pos1, pos2 in trace
+                            if pos1 != -1 and pos2 != -1 and seq_i[pos1] == seq_j[pos2]
+                        )
+                        identity = matches / n_seq
+                except Exception as exc:
+                    raise RuntimeError(f"Alignment failed for {headers1[i]} vs {headers2[j]}") from exc
+                batch.append(f"{headers1[i]}\t{headers2[j]}\t{identity:.4f}\n")
+                count += 1
+                if len(batch) >= _WRITE_BATCH_SIZE:
+                    f.writelines(batch)
+                    batch.clear()
+        if batch:
+            f.writelines(batch)
+    return count
+
+
+def _split_rows_even(n: int, workers: int) -> list[tuple[int, int]]:
+    """Split *n* row indices into *workers* evenly-sized chunks."""
+    chunk_size = max(1, (n + workers - 1) // workers)
+    return [(i, min(i + chunk_size, n)) for i in range(0, n, chunk_size)]
+
+
+def _merge_worker_files(worker_files: list[str], output_file: str) -> None:
+    with open(output_file, "w") as out:
+        out.write("seq1\tseq2\tsequence_identity\n")
+        for wf in worker_files:
+            with open(wf) as f:
+                shutil.copyfileobj(f, out)
+            os.remove(wf)
+
+
+def run_cross_alignments(
+    records1: list[tuple[str, ProteinSequence]],
+    records2: list[tuple[str, ProteinSequence]],
+    workers: int,
+    output_file: str,
+    tmp_dir: str | None = None,
+) -> None:
+    """Align every sequence in *records1* against every sequence in *records2*.
+
+    Each worker handles a slice of *records1* and iterates over all of *records2*.
+    Results are written directly to per-worker temporary files and merged afterward.
+    """
+    n1, n2 = len(records1), len(records2)
+    n_pairs = n1 * n2
+    headers1 = [r[0] for r in records1]
+    seqs1 = [str(r[1]) for r in records1]
+    headers2 = [r[0] for r in records2]
+    seqs2 = [str(r[1]) for r in records2]
+
+    row_chunks = _split_rows_even(n1, workers)
+    base_name = os.path.splitext(os.path.basename(output_file))[0]
+    ext = os.path.splitext(output_file)[1]
+    work_dir = tmp_dir if tmp_dir is not None else os.path.dirname(os.path.abspath(output_file))
+    worker_files = [os.path.join(work_dir, f"{base_name}.worker_{idx}{ext}") for idx in range(len(row_chunks))]
+    tasks = [
+        (i_start, i_end, headers1, seqs1, headers2, seqs2, wf)
+        for (i_start, i_end), wf in zip(row_chunks, worker_files)
+    ]
+
+    print(f"Starting {n_pairs} cross-alignments ({n1} x {n2}) with {workers} workers ({len(tasks)} tasks)")
+
+    with ProcessPoolExecutor(max_workers=workers) as executor:
+        counts = list(tqdm(
+            executor.map(_align_cross_rows, tasks),
+            total=len(tasks),
+            desc="Aligning pairs",
+        ))
+
+    print(f"Merging {len(worker_files)} worker files into {output_file} ...")
+    _merge_worker_files(worker_files, output_file)
+    print(f"Total pairs written: {sum(counts)}")
+
+
 def run_pairwise_alignments(
     records: list[tuple[str, ProteinSequence]],
     workers: int,
@@ -205,13 +320,7 @@ def run_pairwise_alignments(
         ))
 
     print(f"Merging {len(worker_files)} worker files into {output_file} ...")
-    with open(output_file, "w") as out:
-        out.write("seq1\tseq2\tsequence_identity\n")
-        for wf in worker_files:
-            with open(wf) as f:
-                shutil.copyfileobj(f, out)
-            os.remove(wf)
-
+    _merge_worker_files(worker_files, output_file)
     print(f"Total pairs written: {sum(counts)}")
 
 
@@ -224,11 +333,31 @@ def main() -> None:
     )
     parser.add_argument(
         "--structure-path", "-s", required=True,
-        help="Directory containing structure files",
+        help="Directory containing structure files (set 1)",
+    )
+    parser.add_argument(
+        "--structure-path-2", "-S2", default=None,
+        help=(
+            "Optional second directory of structure files. "
+            "When provided, computes cross-product alignments (set1 vs set2) "
+            "instead of all-vs-all within set1."
+        ),
     )
     parser.add_argument(
         "--format", "-f", choices=["pdb", "cif"], default="cif",
-        help="Structure file format (default: cif)",
+        help="Structure file format for set 1 (default: cif)",
+    )
+    parser.add_argument(
+        "--format-2", default=None, choices=["pdb", "cif"],
+        help="Structure file format for set 2 (default: same as --format)",
+    )
+    parser.add_argument(
+        "--extension-2", default=None,
+        help="File extension filter for set 2 (default: same as --extension)",
+    )
+    parser.add_argument(
+        "--fasta-output-2", default=None,
+        help="Output FASTA file for set-2 sequences (optional, only used with --structure-path-2)",
     )
     parser.add_argument(
         "--fasta-output", "-a", required=True,
@@ -273,20 +402,42 @@ def main() -> None:
 
     print(f"Collecting sequences from {args.structure_path} ...")
     records = collect_sequences(args.structure_path, args.format, args.extension)
-    print(f"Found {len(records)} sequences")
+    print(f"Found {len(records)} sequences (set 1)")
 
     if args.window_size is not None:
         records = window_split(records, args.window_size, args.window_step)
-        print(f"After windowing ({args.window_size}/{args.window_step}): {len(records)} fragments")
+        print(f"After windowing ({args.window_size}/{args.window_step}): {len(records)} fragments (set 1)")
 
     with open(args.fasta_output, "w") as fasta_file:
         for header, sequence in records:
             fasta_file.write(f">{header}\n{sequence}\n")
-    print(f"Sequences written to {args.fasta_output}")
+    print(f"Set-1 sequences written to {args.fasta_output}")
 
-    n_pairs = len(records) * (len(records) - 1) // 2
-    print(f"Computing pairwise alignments ({n_pairs} pairs) using {args.workers} workers ...")
-    run_pairwise_alignments(records, args.workers, args.identity_output, args.tmp_dir)
+    if args.structure_path_2 is not None:
+        fmt2 = args.format_2 or args.format
+        ext2 = args.extension_2 if args.extension_2 is not None else args.extension
+        print(f"Collecting sequences from {args.structure_path_2} ...")
+        records2 = collect_sequences(args.structure_path_2, fmt2, ext2)
+        print(f"Found {len(records2)} sequences (set 2)")
+
+        if args.window_size is not None:
+            records2 = window_split(records2, args.window_size, args.window_step)
+            print(f"After windowing: {len(records2)} fragments (set 2)")
+
+        if args.fasta_output_2 is not None:
+            with open(args.fasta_output_2, "w") as fasta_file:
+                for header, sequence in records2:
+                    fasta_file.write(f">{header}\n{sequence}\n")
+            print(f"Set-2 sequences written to {args.fasta_output_2}")
+
+        n_pairs = len(records) * len(records2)
+        print(f"Computing cross alignments ({n_pairs} pairs) using {args.workers} workers ...")
+        run_cross_alignments(records, records2, args.workers, args.identity_output, args.tmp_dir)
+    else:
+        n_pairs = len(records) * (len(records) - 1) // 2
+        print(f"Computing pairwise alignments ({n_pairs} pairs) using {args.workers} workers ...")
+        run_pairwise_alignments(records, args.workers, args.identity_output, args.tmp_dir)
+
     print(f"Pairwise identities written to {args.identity_output}")
 
 
