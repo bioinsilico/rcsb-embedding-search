@@ -71,8 +71,9 @@ class LitSequenceAutoencoderTraining(L.LightningModule):
             )
         if hasattr(self.logger.experiment, 'add_graph'):
             try:
-                dummy = torch.zeros(1, 16, dtype=torch.long, device=self.device)
-                self.logger.experiment.add_graph(self.model, dummy)
+                dummy = torch.ones(1, 16, dtype=torch.long, device=self.device)
+                with torch.no_grad():
+                    self.logger.experiment.add_graph(self.model, dummy)
             except Exception:
                 pass
 
