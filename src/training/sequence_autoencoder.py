@@ -25,7 +25,7 @@ cs.store(name="training_default", node=TrainingConfig)
 logger = logging.getLogger(__name__)
 
 
-@hydra.main(version_base=None, config_path="../../config", config_name="training_config")
+@hydra.main(version_base=None, config_path="../../config", config_name="sequence_autoencoder_config")
 def main(cfg: TrainingConfig):
     logger.info(f"Using config file: {get_config_path()}")
     seed_everything(cfg.global_seed, workers=True)
