@@ -1,10 +1,12 @@
+import pathlib
 import lightning as L
 import torch
+import yaml
 from omegaconf import OmegaConf
 from torch import nn, optim, cat
 from torcheval.metrics.functional import binary_auprc, binary_auroc
 
-from config.schema_config import TrainingConfig
+from config.schema_config import TrainingConfig, Strategy, LrInterval
 from lightning_module.utils import get_cosine_schedule_with_warmup
 from networks.sequence_autoencoder import AA_PAD_IDX
 
@@ -65,9 +67,15 @@ class LitSequenceAutoencoderTraining(L.LightningModule):
         self.z = torch.empty(0).to(self.device)
         self.z_pred = torch.empty(0).to(self.device)
         if self.cfg is not None and hasattr(self.logger.experiment, 'add_text'):
+            yaml.add_representer(pathlib.PurePosixPath, lambda d, v: d.represent_str(str(v)))
+            yaml.add_representer(pathlib.PosixPath, lambda d, v: d.represent_str(str(v)))
+            yaml.add_representer(pathlib.WindowsPath, lambda d, v: d.represent_str(str(v)))
+            yaml.add_representer(Strategy, lambda d, v: d.represent_str(str(v)))
+            yaml.add_representer(LrInterval, lambda d, v: d.represent_str(str(v)))
+
             self.logger.experiment.add_text(
                 "Config",
-                OmegaConf.to_yaml(OmegaConf.to_container(self.cfg, resolve=True))
+                yaml.dump(OmegaConf.to_container(self.cfg, resolve=True))
             )
         if hasattr(self.logger.experiment, 'add_graph'):
             try:
