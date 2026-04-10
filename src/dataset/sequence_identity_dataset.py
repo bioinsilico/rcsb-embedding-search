@@ -153,6 +153,7 @@ class SequenceIdentityDataset(Dataset):
     @staticmethod
     def _load_pairs_full(identity_file: str, exclude: set[str]) -> pd.DataFrame:
         """Load the entire TSV into memory (suitable for small-to-medium files)."""
+        logger.info(f"Loading {identity_file} identity values.")
         dtype = {'domain_i': 'str', 'domain_j': 'str', 'score': 'float32'}
         df = pd.read_csv(
             identity_file,
@@ -166,6 +167,7 @@ class SequenceIdentityDataset(Dataset):
         df = _strip_header_row(df)
         if exclude:
             df = df[~df['domain_i'].isin(exclude) & ~df['domain_j'].isin(exclude)]
+        logger.info(f"Loaded {len(df)} identity values.")
         return df.reset_index(drop=True)
 
     @staticmethod
@@ -182,6 +184,9 @@ class SequenceIdentityDataset(Dataset):
         Algorithm R reservoir sampling, so the final DataFrame has at most
         ``max_pairs`` rows with a balanced score distribution.
         """
+
+        logger.info(f"Loading {identity_file} identity values. Number of pairs: {max_pairs} | intervals: {n_intervals}")
+
         bucket_size = max_pairs // n_intervals
         # reservoirs[k] = list of (domain_i, domain_j, score) rows for bin k
         reservoirs: list[list[tuple]] = [[] for _ in range(n_intervals)]
