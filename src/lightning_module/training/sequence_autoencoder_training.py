@@ -69,6 +69,12 @@ class LitSequenceAutoencoderTraining(L.LightningModule):
                 "Config",
                 OmegaConf.to_yaml(OmegaConf.to_container(self.cfg, resolve=True))
             )
+        if hasattr(self.logger.experiment, 'add_graph'):
+            try:
+                dummy = torch.zeros(1, 16, dtype=torch.long, device=self.device)
+                self.logger.experiment.add_graph(self.model, dummy)
+            except Exception:
+                pass
 
     # ------------------------------------------------------------------
     # Shared step logic
