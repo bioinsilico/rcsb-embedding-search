@@ -1,5 +1,6 @@
 import lightning as L
 import torch
+from omegaconf import OmegaConf
 from torch import nn, optim, cat
 from torcheval.metrics.functional import binary_auprc, binary_auroc
 
@@ -63,6 +64,11 @@ class LitSequenceAutoencoderTraining(L.LightningModule):
     def on_fit_start(self):
         self.z = torch.empty(0).to(self.device)
         self.z_pred = torch.empty(0).to(self.device)
+        if self.cfg is not None and hasattr(self.logger.experiment, 'add_text'):
+            self.logger.experiment.add_text(
+                "Config",
+                OmegaConf.to_yaml(OmegaConf.to_container(self.cfg, resolve=True))
+            )
 
     # ------------------------------------------------------------------
     # Shared step logic
