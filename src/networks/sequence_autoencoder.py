@@ -1,8 +1,11 @@
 import math
+from collections import OrderedDict
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+from networks.layers import ResBlock
 
 
 # Standard amino acid alphabet + special tokens
@@ -54,7 +57,12 @@ class SequenceAutoencoder(nn.Module):
     Architecture
     ------------
     Encoder:  AA embedding + positional encoding → TransformerEncoder
-              → mean pooling (masked) → linear projection → L2 normalize
+              → pooling (masked) → projection → L2 normalize
+
+              Pooling strategy depends on ``res_block_layers``:
+              - 0 (default): mean pooling → LayerNorm → Linear
+              - >0: summation pooling → N × ResBlock → Linear
+
     Decoder:  latent → linear expansion to d_model → (1-token memory)
               Positional queries → TransformerDecoder cross-attending to memory
               → linear → vocab logits
@@ -73,11 +81,13 @@ class SequenceAutoencoder(nn.Module):
         max_seq_len: int = 2048,
         vocab_size: int = AA_VOCAB_SIZE,
         pad_idx: int = AA_PAD_IDX,
+        res_block_layers: int = 0,
     ):
         super().__init__()
         self.d_model = d_model
         self.latent_dim = latent_dim
         self.pad_idx = pad_idx
+        self.res_block_layers = res_block_layers
 
         # --- Shared layers ---
         self.aa_embedding = nn.Embedding(vocab_size, d_model, padding_idx=pad_idx)
@@ -92,10 +102,23 @@ class SequenceAutoencoder(nn.Module):
             batch_first=True,
         )
         self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_encoder_layers)
-        self.to_latent = nn.Sequential(
-            nn.LayerNorm(d_model),
-            nn.Linear(d_model, latent_dim),
-        )
+
+        if res_block_layers == 0:
+            # Mean pooling → LayerNorm → Linear
+            self.to_latent = nn.Sequential(
+                nn.LayerNorm(d_model),
+                nn.Linear(d_model, latent_dim),
+            )
+        else:
+            # Summation pooling → ResBlocks → Linear
+            layers = OrderedDict([
+                (f'block{i}', ResBlock(d_model, d_model, self.dropout))
+                for i in range(res_block_layers)
+            ])
+            layers['dropout'] = nn.Dropout(p=self.dropout)
+            layers['linear'] = nn.Linear(d_model, latent_dim)
+            layers['activation'] = nn.ReLU()
+            self.to_latent = nn.Sequential(layers)
 
         # --- Decoder ---
         self.from_latent = nn.Linear(latent_dim, d_model)
@@ -129,9 +152,14 @@ class SequenceAutoencoder(nn.Module):
         x = self.pos_encoding(self.aa_embedding(tokens))
         x = self.encoder(x, src_key_padding_mask=pad_mask)
 
-        # Mean pooling over non-padded positions
+        # Zero-out padding positions before pooling
         valid = (~pad_mask).unsqueeze(-1).float()  # (B, L, 1)
-        pooled = (x * valid).sum(dim=1) / valid.sum(dim=1).clamp(min=1)
+        if self.res_block_layers == 0:
+            # Mean pooling
+            pooled = (x * valid).sum(dim=1) / valid.sum(dim=1).clamp(min=1)
+        else:
+            # Summation pooling
+            pooled = (x * valid).sum(dim=1)
 
         latent = self.to_latent(pooled)
         return F.normalize(latent, dim=-1)
