@@ -63,6 +63,11 @@ class SequenceAutoencoder(nn.Module):
               - 0 (default): mean pooling → LayerNorm → Linear
               - >0: summation pooling → N × ResBlock → Linear
 
+    Length:   latent → Linear → scalar log-length prediction.
+              Trained with MSE on log(true_length).  At inference, call
+              :meth:`predict_length` to obtain the integer length, then pass
+              it to :meth:`decode` — no ground-truth length needed.
+
     Decoder:  latent → linear expansion to d_model → (1-token memory)
               Positional queries → TransformerDecoder cross-attending to memory
               → linear → vocab logits
@@ -120,6 +125,11 @@ class SequenceAutoencoder(nn.Module):
             layers['activation'] = nn.ReLU()
             self.to_latent = nn.Sequential(layers)
 
+        # --- Length predictor ---
+        # Predicts log(sequence_length) from the latent vector.
+        # Log-space keeps gradients well-behaved across the wide protein length range (~20–2000).
+        self.length_head = nn.Linear(latent_dim, 1)
+
         # --- Decoder ---
         self.from_latent = nn.Linear(latent_dim, d_model)
         # Learned position queries — the only input the decoder needs at inference
@@ -163,6 +173,19 @@ class SequenceAutoencoder(nn.Module):
 
         latent = self.to_latent(pooled)
         return F.normalize(latent, dim=-1)
+
+    def predict_length(self, latent: torch.Tensor) -> torch.Tensor:
+        """Predict sequence length from a latent vector.
+
+        Returns the predicted log-length as a ``(B,)`` float tensor.
+        Use this during training to compute the length loss against
+        ``torch.log(true_lengths.float())``.
+
+        At inference, convert to an integer length with::
+
+            seq_len = model.predict_length(latent).exp().round().long().clamp(min=1)
+        """
+        return self.length_head(latent).squeeze(-1)
 
     def decode(self, latent: torch.Tensor, seq_len: int) -> torch.Tensor:
         """Decode a latent vector into per-position vocabulary logits.

@@ -73,8 +73,9 @@ def main(cfg: TrainingConfig):
     model = LitSequenceAutoencoderTraining(
         nn_model=nn_model,
         learning_rate=cfg.training_parameters.learning_rate,
-        reconstruction_weight=cfg.metadata.reconstruction_weight if cfg.metadata is not None and 'reconstruction_weight' in cfg.metadata else 1.0,
-        similarity_weight=cfg.metadata.similarity_weight if cfg.metadata is not None and 'similarity_weight' in cfg.metadata else 1.0,
+        reconstruction_weight=meta.get('reconstruction_weight', 1.0),
+        similarity_weight=meta.get('similarity_weight', 1.0),
+        length_weight=meta.get('length_weight', 1.0),
         cfg=cfg,
     )
 
