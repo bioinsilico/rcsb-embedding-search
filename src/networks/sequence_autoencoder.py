@@ -63,14 +63,14 @@ class SequenceAutoencoder(nn.Module):
               - 0 (default): mean pooling → LayerNorm → Linear
               - >0: summation pooling → N × ResBlock → Linear
 
-    Length:   latent → Linear → scalar log-length prediction.
-              Trained with MSE on log(true_length).  At inference, call
-              :meth:`predict_length` to obtain the integer length, then pass
-              it to :meth:`decode` — no ground-truth length needed.
+    Decoder:  Autoregressive TransformerDecoder with causal masking.
 
-    Decoder:  latent → linear expansion to d_model → (1-token memory)
-              Positional queries → TransformerDecoder cross-attending to memory
-              → linear → vocab logits
+              Memory = latent → Linear → (B, 1, d_model).
+              Target = token embeddings + positional encoding.
+
+              Training uses teacher forcing: input ``[<bos>, A, …, V]`` →
+              target ``[A, …, V, <eos>]``.  Inference generates one token
+              at a time until ``<eos>`` or ``max_seq_len``.
     """
 
     dropout = 0.1
@@ -93,6 +93,8 @@ class SequenceAutoencoder(nn.Module):
         self.latent_dim = latent_dim
         self.pad_idx = pad_idx
         self.res_block_layers = res_block_layers
+        self.max_seq_len = max_seq_len
+        self.eos_idx = AA_TOKENS['<eos>']
 
         # --- Shared layers ---
         self.aa_embedding = nn.Embedding(vocab_size, d_model, padding_idx=pad_idx)
@@ -125,16 +127,9 @@ class SequenceAutoencoder(nn.Module):
             layers['activation'] = nn.ReLU()
             self.to_latent = nn.Sequential(layers)
 
-        # --- Length predictor ---
-        # Predicts log(sequence_length) from the latent vector.
-        # Log-space keeps gradients well-behaved across the wide protein length range (~20–2000).
-        self.length_head = nn.Linear(latent_dim, 1)
-
-        # --- Decoder ---
+        # --- Decoder (autoregressive) ---
         self.from_latent = nn.Linear(latent_dim, d_model)
-        # Learned position queries — the only input the decoder needs at inference
-        # is the target length; no ground-truth tokens required.
-        self.decoder_queries = nn.Embedding(max_seq_len, d_model)
+        self.decoder_pos_encoding = SinusoidalPositionalEncoding(d_model, max_seq_len, self.dropout)
         decoder_layer = nn.TransformerDecoderLayer(
             d_model=d_model,
             nhead=nhead,
@@ -174,61 +169,106 @@ class SequenceAutoencoder(nn.Module):
         latent = self.to_latent(pooled)
         return F.normalize(latent, dim=-1)
 
-    def predict_length(self, latent: torch.Tensor) -> torch.Tensor:
-        """Predict sequence length from a latent vector.
-
-        Returns the predicted log-length as a ``(B,)`` float tensor.
-        Use this during training to compute the length loss against
-        ``torch.log(true_lengths.float())``.
-
-        At inference, convert to an integer length with::
-
-            seq_len = model.predict_length(latent).exp().round().long().clamp(min=1)
-        """
-        return self.length_head(latent).squeeze(-1)
-
-    def decode(self, latent: torch.Tensor, seq_len: int) -> torch.Tensor:
-        """Decode a latent vector into per-position vocabulary logits.
-
-        Fully non-autoregressive: the decoder uses learned position queries
-        and cross-attends to the latent vector.  No ground-truth tokens are
-        needed, so the same call works identically during training and inference.
+    def decode(self, latent: torch.Tensor, tgt_tokens: torch.Tensor) -> torch.Tensor:
+        """Teacher-forced decoding (training).
 
         Args:
-            latent: (B, latent_dim) L2-normalized embedding from :meth:`encode`.
-            seq_len: number of positions to decode (typically the input length
-                     during training; a desired output length at inference).
+            latent: (B, latent_dim) from :meth:`encode`.
+            tgt_tokens: (B, L) decoder input tokens, e.g.
+                ``[<bos>, A, R, …, V]`` (the target sequence shifted right
+                by one with ``<bos>`` prepended).
 
         Returns:
-            (B, seq_len, vocab_size) logits over the amino acid vocabulary.
+            (B, L, vocab_size) logits.  The target for cross-entropy is the
+            original un-shifted sequence ``[A, R, …, V, <eos>]``.
+        """
+        memory = self.from_latent(latent).unsqueeze(1)  # (B, 1, d_model)
+        tgt = self.decoder_pos_encoding(self.aa_embedding(tgt_tokens))
+
+        causal_mask = nn.Transformer.generate_square_subsequent_mask(
+            tgt_tokens.size(1), device=tgt.device,
+        )
+        tgt_pad_mask = (tgt_tokens == self.pad_idx)
+
+        out = self.decoder(
+            tgt, memory,
+            tgt_mask=causal_mask,
+            tgt_key_padding_mask=tgt_pad_mask,
+        )
+        return self.output_proj(out)
+
+    @torch.no_grad()
+    def decode_sequence(self, latent: torch.Tensor) -> list[torch.Tensor]:
+        """Autoregressive greedy decoding at inference.
+
+        Generates one token at a time, feeding each prediction back as
+        input, until every sequence in the batch has produced ``<eos>``
+        or ``max_seq_len`` tokens have been generated.
+
+        Args:
+            latent: (B, latent_dim) embedding from :meth:`encode`.
+
+        Returns:
+            List of B 1-D long tensors, each containing the predicted amino
+            acid token indices up to (but not including) ``<eos>``.
         """
         B = latent.size(0)
-
-        # Memory: the latent as a single-token sequence for cross-attention
         memory = self.from_latent(latent).unsqueeze(1)  # (B, 1, d_model)
 
-        # Position queries: (B, seq_len, d_model) — no target tokens needed
-        positions = torch.arange(seq_len, device=latent.device)
-        tgt = self.decoder_queries(positions).unsqueeze(0).expand(B, -1, -1)
+        generated = torch.full(
+            (B, 1), AA_TOKENS['<bos>'], dtype=torch.long, device=latent.device,
+        )
+        finished = torch.zeros(B, dtype=torch.bool, device=latent.device)
 
-        out = self.decoder(tgt, memory)
-        return self.output_proj(out)
+        for _ in range(self.max_seq_len):
+            tgt = self.decoder_pos_encoding(self.aa_embedding(generated))
+            causal_mask = nn.Transformer.generate_square_subsequent_mask(
+                generated.size(1), device=latent.device,
+            )
+            out = self.decoder(tgt, memory, tgt_mask=causal_mask)
+            next_logits = self.output_proj(out[:, -1, :])      # (B, vocab)
+            next_token = next_logits.argmax(dim=-1, keepdim=True)  # (B, 1)
+
+            next_token = next_token.masked_fill(finished.unsqueeze(1), self.pad_idx)
+            generated = torch.cat([generated, next_token], dim=1)
+
+            finished = finished | (next_token.squeeze(1) == self.eos_idx)
+            if finished.all():
+                break
+
+        # Strip leading <bos>, truncate each sequence at its first <eos>
+        sequences = []
+        for row in generated[:, 1:]:
+            eos_positions = (row == self.eos_idx).nonzero(as_tuple=False)
+            end = eos_positions[0].item() if len(eos_positions) > 0 else row.size(0)
+            sequences.append(row[:end])
+        return sequences
 
     def forward(
         self,
         tokens: torch.Tensor,
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Full forward pass returning logits and latent embedding.
+        """Full forward pass with teacher-forced decoding.
 
         Args:
-            tokens: (B, L) amino acid token indices (padded).
+            tokens: (B, L) amino acid token indices ending with ``<eos>``,
+                padded with ``<pad>``.
 
         Returns:
-            logits: (B, L, vocab_size) reconstruction logits.
+            logits: (B, L, vocab_size) reconstruction logits whose target
+                is ``tokens`` itself (the shifted input is built internally).
             latent: (B, latent_dim) L2-normalized embedding.
         """
         latent = self.encode(tokens)
-        logits = self.decode(latent, tokens.size(1))
+
+        # Build shifted decoder input: [<bos>] + tokens[:, :-1]
+        bos = torch.full(
+            (tokens.size(0), 1), AA_TOKENS['<bos>'],
+            dtype=torch.long, device=tokens.device,
+        )
+        decoder_input = torch.cat([bos, tokens[:, :-1]], dim=1)
+
+        logits = self.decode(latent, decoder_input)
         return logits, latent
 
     def embedding(self, tokens: torch.Tensor) -> torch.Tensor:

@@ -15,20 +15,19 @@ class LitSequenceAutoencoderTraining(L.LightningModule):
     """Lightning module for the protein sequence autoencoder.
 
     Training uses paired protein sequences with known sequence identity scores.
-    Three losses are combined:
+    Two losses are combined:
 
     1. **Reconstruction loss** (cross-entropy): ensures the autoencoder can
        faithfully reconstruct each input sequence from its latent vector.
+       Sequences include a trailing ``<eos>`` token so the model also learns
+       where each sequence ends.
     2. **Similarity alignment loss** (MSE): forces the cosine similarity
        between the two latent vectors in a pair to match the ground-truth
        sequence identity score.
-    3. **Length prediction loss** (MSE on log-length): trains the length head
-       to predict sequence length from the latent, enabling length-free decoding
-       at inference time.
 
     The total loss is::
 
-        loss = reconstruction_weight * CE + similarity_weight * MSE_sim + length_weight * MSE_len
+        loss = reconstruction_weight * CE + similarity_weight * MSE
 
     Expected batch format from the dataloader::
 
@@ -50,7 +49,6 @@ class LitSequenceAutoencoderTraining(L.LightningModule):
         learning_rate: float = 1e-4,
         reconstruction_weight: float = 1.0,
         similarity_weight: float = 1.0,
-        length_weight: float = 1.0,
         cfg: TrainingConfig = None,
     ):
         super().__init__()
@@ -58,7 +56,6 @@ class LitSequenceAutoencoderTraining(L.LightningModule):
         self.learning_rate = learning_rate
         self.reconstruction_weight = reconstruction_weight
         self.similarity_weight = similarity_weight
-        self.length_weight = length_weight
         self.cfg = cfg
 
         self.z = None
@@ -113,36 +110,20 @@ class LitSequenceAutoencoderTraining(L.LightningModule):
         cos_sim = nn.functional.cosine_similarity(latent_i, latent_j)
         sim_loss = nn.functional.mse_loss(cos_sim, score)
 
-        # Length prediction loss — MSE in log-space against true non-padding lengths
-        true_len_i = (tokens_i != AA_PAD_IDX).sum(dim=1).float()
-        true_len_j = (tokens_j != AA_PAD_IDX).sum(dim=1).float()
-        len_loss_i = nn.functional.mse_loss(
-            self.model.predict_length(latent_i), torch.log(true_len_i)
-        )
-        len_loss_j = nn.functional.mse_loss(
-            self.model.predict_length(latent_j), torch.log(true_len_j)
-        )
-        len_loss = (len_loss_i + len_loss_j) / 2.0
-
-        loss = (
-            self.reconstruction_weight * recon_loss
-            + self.similarity_weight * sim_loss
-            + self.length_weight * len_loss
-        )
-        return loss, cos_sim, score, recon_loss, sim_loss, len_loss
+        loss = self.reconstruction_weight * recon_loss + self.similarity_weight * sim_loss
+        return loss, cos_sim, score, recon_loss, sim_loss
 
     # ------------------------------------------------------------------
     # Training
     # ------------------------------------------------------------------
 
     def training_step(self, batch, batch_idx):
-        loss, cos_sim, score, recon_loss, sim_loss, len_loss = self._step(batch)
+        loss, cos_sim, score, recon_loss, sim_loss = self._step(batch)
         self.z = cat((self.z, score), dim=0)
         self.z_pred = cat((self.z_pred, cos_sim), dim=0)
 
         self.log('recon_loss', recon_loss, prog_bar=True)
         self.log('sim_loss', sim_loss, prog_bar=True)
-        self.log('len_loss', len_loss, prog_bar=True)
         return loss
 
     def on_train_epoch_end(self):
@@ -153,13 +134,12 @@ class LitSequenceAutoencoderTraining(L.LightningModule):
     # ------------------------------------------------------------------
 
     def validation_step(self, batch, batch_idx):
-        loss, cos_sim, score, recon_loss, sim_loss, len_loss = self._step(batch)
+        loss, cos_sim, score, recon_loss, sim_loss = self._step(batch)
         self.z = cat((self.z, score), dim=0)
         self.z_pred = cat((self.z_pred, cos_sim), dim=0)
 
         self.log('val_recon_loss', recon_loss, prog_bar=True)
         self.log('val_sim_loss', sim_loss, prog_bar=True)
-        self.log('val_len_loss', len_loss, prog_bar=True)
 
     def on_validation_epoch_start(self):
         self._log_metrics(self.TRAIN_LOSS_METRIC_NAME)

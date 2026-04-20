@@ -75,7 +75,6 @@ def main(cfg: TrainingConfig):
         learning_rate=cfg.training_parameters.learning_rate,
         reconstruction_weight=meta.get('reconstruction_weight', 1.0),
         similarity_weight=meta.get('similarity_weight', 1.0),
-        length_weight=meta.get('length_weight', 1.0),
         cfg=cfg,
     )
 

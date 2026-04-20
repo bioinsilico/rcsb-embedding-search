@@ -10,7 +10,7 @@ from torch.utils.data import Dataset, DataLoader
 
 from dataset.utils.tm_score_weight import binary_score, binary_weights, fraction_score, tm_score_weights, \
     fraction_score_of
-from networks.sequence_autoencoder import tokenize_sequence, AA_PAD_IDX
+from networks.sequence_autoencoder import tokenize_sequence, AA_PAD_IDX, AA_TOKENS
 
 d_type = np.float32
 
@@ -139,10 +139,14 @@ class SequenceIdentityDataset(Dataset):
 
         logger.info(f"Total pairs: {len(self.pairs)} | Unique sequences: {len(self.sequences)}")
 
-        # Pre-tokenize only sequences that appear in the retained pairs
+        # Pre-tokenize only sequences that appear in the retained pairs.
+        # Each sequence is terminated with <eos> so the decoder can learn
+        # where the sequence ends; truncation at the first <eos> prediction
+        # then gives the sequence length at inference without a separate head.
+        eos = torch.tensor([AA_TOKENS['<eos>']], dtype=torch.long)
         referenced = set(self.pairs['domain_i']) | set(self.pairs['domain_j'])
         self._token_cache: dict[str, torch.Tensor] = {
-            h: torch.tensor(tokenize_sequence(self.sequences[h]), dtype=torch.long)
+            h: torch.cat([torch.tensor(tokenize_sequence(self.sequences[h]), dtype=torch.long), eos])
             for h in referenced
         }
 
