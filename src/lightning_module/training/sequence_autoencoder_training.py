@@ -8,7 +8,7 @@ from torcheval.metrics.functional import binary_auprc, binary_auroc
 
 from config.schema_config import TrainingConfig, Strategy, LrInterval
 from lightning_module.utils import get_cosine_schedule_with_warmup
-from networks.sequence_autoencoder import AA_PAD_IDX
+from networks.sequence_autoencoder import AA_PAD_IDX, AA_TOKENS
 
 
 class LitSequenceAutoencoderTraining(L.LightningModule):
@@ -68,6 +68,8 @@ class LitSequenceAutoencoderTraining(L.LightningModule):
     def on_fit_start(self):
         self.z = torch.empty(0).to(self.device)
         self.z_pred = torch.empty(0).to(self.device)
+        self.recon_correct = 0
+        self.recon_total = 0
         if self.cfg is not None and hasattr(self.logger.experiment, 'add_text'):
             yaml.add_representer(pathlib.PurePosixPath, lambda d, v: d.represent_str(str(v)))
             yaml.add_representer(pathlib.PosixPath, lambda d, v: d.represent_str(str(v)))
@@ -141,6 +143,19 @@ class LitSequenceAutoencoderTraining(L.LightningModule):
         self.log('val_recon_loss', recon_loss, prog_bar=True)
         self.log('val_sim_loss', sim_loss, prog_bar=True)
 
+        # Autoregressive reconstruction accuracy
+        tokens_i, tokens_j, _ = batch
+        latent_i = self.model.encode(tokens_i)
+        latent_j = self.model.encode(tokens_j)
+        for latent, tokens in [(latent_i, tokens_i), (latent_j, tokens_j)]:
+            predicted = self.model.decode_sequence(latent)
+            for pred, gt_row in zip(predicted, tokens):
+                # Ground-truth amino acids: strip <eos> and <pad>
+                gt = gt_row[(gt_row != AA_PAD_IDX) & (gt_row != AA_TOKENS['<eos>'])]
+                length = min(len(pred), len(gt))
+                self.recon_correct += (pred[:length] == gt[:length]).sum().item()
+                self.recon_total += len(gt)
+
     def on_validation_epoch_start(self):
         self._log_metrics(self.TRAIN_LOSS_METRIC_NAME)
 
@@ -155,6 +170,10 @@ class LitSequenceAutoencoderTraining(L.LightningModule):
             else:
                 roc_auc = binary_auroc(z_pred, z)
             self.log(self.ROC_AUC_METRIC_NAME, roc_auc, sync_dist=True)
+        if self.recon_total > 0:
+            self.log('val_recon_accuracy', self.recon_correct / self.recon_total, sync_dist=True)
+            self.recon_correct = 0
+            self.recon_total = 0
         self._log_metrics(self.VALIDATION_LOSS_METRIC_NAME)
 
     # ------------------------------------------------------------------
