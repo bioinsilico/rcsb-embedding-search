@@ -131,6 +131,67 @@ class LitSequenceAutoencoderTraining(L.LightningModule):
         )
         return loss, cos_sim, score, recon_loss, sim_loss, len_loss
 
+    def _val_step(self, batch):
+        """Validation step using predicted length for decoding.
+
+        Unlike :meth:`_step`, the decoder is evaluated with the length
+        produced by :meth:`predict_length` rather than the true input length,
+        mirroring inference. Because ``decode`` takes a single ``seq_len``
+        per call, reconstruction is computed per-sample in a Python loop.
+        """
+        tokens_i, tokens_j, score = batch
+
+        latent_i = self.model.encode(tokens_i)
+        latent_j = self.model.encode(tokens_j)
+
+        cos_sim = nn.functional.cosine_similarity(latent_i, latent_j)
+        sim_loss = nn.functional.mse_loss(cos_sim, score)
+
+        true_len_i = (tokens_i != AA_PAD_IDX).sum(dim=1).float()
+        true_len_j = (tokens_j != AA_PAD_IDX).sum(dim=1).float()
+
+        pred_log_len_i = self.model.predict_length(latent_i)
+        pred_log_len_j = self.model.predict_length(latent_j)
+        len_loss_i = nn.functional.mse_loss(pred_log_len_i, torch.log(true_len_i))
+        len_loss_j = nn.functional.mse_loss(pred_log_len_j, torch.log(true_len_j))
+        len_loss = (len_loss_i + len_loss_j) / 2.0
+
+        recon_loss_i = self._per_sample_recon_loss(latent_i, tokens_i, true_len_i, pred_log_len_i)
+        recon_loss_j = self._per_sample_recon_loss(latent_j, tokens_j, true_len_j, pred_log_len_j)
+        recon_loss = (recon_loss_i + recon_loss_j) / 2.0
+
+        loss = (
+            self.reconstruction_weight * recon_loss
+            + self.similarity_weight * sim_loss
+            + self.length_weight * len_loss
+        )
+        return loss, cos_sim, score, recon_loss, sim_loss, len_loss
+
+    def _per_sample_recon_loss(self, latent, tokens, true_len, pred_log_len):
+        """CE reconstruction loss with per-sample predicted decoding length.
+
+        Decodes each sample at its predicted length, then compares the first
+        ``min(pred_len, true_len)`` positions against the true tokens. Samples
+        where that overlap is zero contribute nothing.
+        """
+        max_positions = self.model.decoder_queries.num_embeddings
+        pred_len = pred_log_len.exp().round().long().clamp(min=1, max=max_positions)
+        true_len_long = true_len.long()
+
+        losses = []
+        for b in range(latent.size(0)):
+            n = int(min(pred_len[b].item(), true_len_long[b].item()))
+            if n == 0:
+                continue
+            pl = int(pred_len[b].item())
+            logits_b = self.model.decode(latent[b : b + 1], pl)  # (1, pl, V)
+            losses.append(
+                nn.functional.cross_entropy(logits_b[0, :n], tokens[b, :n])
+            )
+        if not losses:
+            return torch.zeros((), device=latent.device)
+        return torch.stack(losses).mean()
+
     # ------------------------------------------------------------------
     # Training
     # ------------------------------------------------------------------
@@ -153,7 +214,8 @@ class LitSequenceAutoencoderTraining(L.LightningModule):
     # ------------------------------------------------------------------
 
     def validation_step(self, batch, batch_idx):
-        loss, cos_sim, score, recon_loss, sim_loss, len_loss = self._step(batch)
+        # loss, cos_sim, score, recon_loss, sim_loss, len_loss = self._step(batch)
+        loss, cos_sim, score, recon_loss, sim_loss, len_loss = self._val_step(batch)
         self.z = cat((self.z, score), dim=0)
         self.z_pred = cat((self.z_pred, cos_sim), dim=0)
 
