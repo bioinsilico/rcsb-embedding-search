@@ -78,9 +78,14 @@ class LitSequenceAutoencoderTraining(L.LightningModule):
             yaml.add_representer(Strategy, lambda d, v: d.represent_str(str(v)))
             yaml.add_representer(LrInterval, lambda d, v: d.represent_str(str(v)))
 
+            total_params = sum(p.numel() for p in self.model.parameters())
+            trainable_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
+            config = OmegaConf.to_container(self.cfg, resolve=True)
+            config['model_parameters'] = f"{trainable_params}/{total_params}"
+            config_text = yaml.dump(config)
             self.logger.experiment.add_text(
                 "Config",
-                yaml.dump(OmegaConf.to_container(self.cfg, resolve=True))
+                config_text
             )
         if hasattr(self.logger.experiment, 'add_graph'):
             try:
