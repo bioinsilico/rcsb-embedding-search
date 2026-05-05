@@ -35,7 +35,11 @@ def collect_sequences(input_dir: str, fmt: str, ext: str | None = None) -> list[
                 if isinstance(atom_array, AtomArrayStack):
                     atom_array = atom_array[0]
             else:
-                atom_array = pdbx.get_structure(pdbx.CIFFile.read(file_path), model=1)
+                atom_array = pdbx.get_structure(
+                    pdbx.CIFFile.read(file_path),
+                    use_author_fields=False,
+                    model=1
+                )
         except BadStructureError:
             print(f"Warning: could not read {filename}, skipping")
             continue
