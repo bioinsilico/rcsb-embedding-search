@@ -9,7 +9,7 @@ import biotite.sequence.align as align
 import biotite.structure.io.pdb as pdb
 import biotite.structure.io.pdbx as pdbx
 from biotite.sequence import ProteinSequence
-from biotite.structure import BadStructureError, filter_amino_acids, filter_polymer, to_sequence
+from biotite.structure import BadStructureError, filter_amino_acids, filter_polymer, to_sequence, chain_iter
 from biotite.structure.atoms import AtomArrayStack
 from tqdm import tqdm
 
@@ -40,18 +40,19 @@ def collect_sequences(input_dir: str, fmt: str, ext: str | None = None) -> list[
             print(f"Warning: could not read {filename}, skipping")
             continue
 
-        atom_array = atom_array[filter_polymer(atom_array)]
-        atom_array = atom_array[filter_amino_acids(atom_array)]
-
-        try:
-            sequences, chain_starts = to_sequence(atom_array)
-        except BadStructureError:
-            print(f"Warning: could not extract sequences from {filename}, skipping")
-            continue
-
-        for sequence, start_idx in zip(sequences, chain_starts):
-            chain_id = atom_array.chain_id[start_idx] or "0"
-            records.append((f"{stem}.{chain_id}", sequence))
+        for atom_ch in chain_iter(atom_array):
+            atom_res = atom_ch[filter_polymer(atom_ch)]
+            atom_res = atom_res[filter_amino_acids(atom_res)]
+            if len(atom_res) == 0:
+                continue
+            try:
+                sequences, chain_starts = to_sequence(atom_res)
+            except BadStructureError:
+                print(f"Warning: could not extract sequences from {filename}, skipping")
+                continue
+            for sequence, start_idx in zip(sequences, chain_starts):
+                chain_id = atom_array.chain_id[start_idx] or "0"
+                records.append((f"{stem}.{chain_id}", sequence))
 
     return records
 
