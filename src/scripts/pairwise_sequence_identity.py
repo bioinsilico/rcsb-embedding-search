@@ -6,6 +6,7 @@ import shutil
 from concurrent.futures import ProcessPoolExecutor
 
 import biotite.sequence.align as align
+import biotite.sequence.io.fasta as fasta
 import biotite.structure.io.pdb as pdb
 import biotite.structure.io.pdbx as pdbx
 from biotite.sequence import ProteinSequence
@@ -58,6 +59,18 @@ def collect_sequences(input_dir: str, fmt: str, ext: str | None = None) -> list[
                 chain_id = atom_array.chain_id[start_idx] or "0"
                 records.append((f"{stem}.{chain_id}", sequence))
 
+    return records
+
+
+def collect_sequences_from_fasta(fasta_path: str) -> list[tuple[str, ProteinSequence]]:
+    """Return (header, sequence) pairs for all entries in a FASTA file."""
+    records: list[tuple[str, ProteinSequence]] = []
+    fasta_file = fasta.FastaFile.read(fasta_path)
+    for header, seq_str in fasta_file.items():
+        try:
+            records.append((header, ProteinSequence(seq_str)))
+        except Exception as exc:
+            print(f"Warning: could not parse sequence '{header}': {exc}, skipping")
     return records
 
 
@@ -332,12 +345,12 @@ def run_pairwise_alignments(
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
-            "Collect sequences from structure files in a directory, write them as FASTA, "
+            "Collect sequences from structure files or FASTA files, "
             "and compute pairwise global sequence identities."
         )
     )
     parser.add_argument(
-        "--structure-path", "-s", required=True,
+        "--structure-path", "-s", default=None,
         help="Directory containing structure files (set 1)",
     )
     parser.add_argument(
@@ -346,6 +359,17 @@ def main() -> None:
             "Optional second directory of structure files. "
             "When provided, computes cross-product alignments (set1 vs set2) "
             "instead of all-vs-all within set1."
+        ),
+    )
+    parser.add_argument(
+        "--fasta-input", "-F", default=None,
+        help="Input FASTA file for set 1 (alternative to --structure-path)",
+    )
+    parser.add_argument(
+        "--fasta-input-2", "-F2", default=None,
+        help=(
+            "Input FASTA file for set 2 (alternative to --structure-path-2). "
+            "When provided, computes cross-product alignments (set1 vs set2)."
         ),
     )
     parser.add_argument(
@@ -400,13 +424,23 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    if args.structure_path is None and args.fasta_input is None:
+        parser.error("at least one of --structure-path or --fasta-input is required")
+    if args.structure_path is not None and args.fasta_input is not None:
+        parser.error("--structure-path and --fasta-input are mutually exclusive")
+    if args.structure_path_2 is not None and args.fasta_input_2 is not None:
+        parser.error("--structure-path-2 and --fasta-input-2 are mutually exclusive")
     if args.window_step is not None and args.window_size is None:
         parser.error("--window-step requires --window-size")
     if args.window_size is not None and args.window_step is None:
         args.window_step = args.window_size
 
-    print(f"Collecting sequences from {args.structure_path} ...")
-    records = collect_sequences(args.structure_path, args.format, args.extension)
+    if args.fasta_input is not None:
+        print(f"Reading sequences from {args.fasta_input} ...")
+        records = collect_sequences_from_fasta(args.fasta_input)
+    else:
+        print(f"Collecting sequences from {args.structure_path} ...")
+        records = collect_sequences(args.structure_path, args.format, args.extension)
     print(f"Found {len(records)} sequences (set 1)")
 
     if args.window_size is not None:
@@ -418,11 +452,16 @@ def main() -> None:
             fasta_file.write(f">{header}\n{sequence}\n")
     print(f"Set-1 sequences written to {args.fasta_output}")
 
-    if args.structure_path_2 is not None:
-        fmt2 = args.format_2 or args.format
-        ext2 = args.extension_2 if args.extension_2 is not None else args.extension
-        print(f"Collecting sequences from {args.structure_path_2} ...")
-        records2 = collect_sequences(args.structure_path_2, fmt2, ext2)
+    has_set2 = args.structure_path_2 is not None or args.fasta_input_2 is not None
+    if has_set2:
+        if args.fasta_input_2 is not None:
+            print(f"Reading sequences from {args.fasta_input_2} ...")
+            records2 = collect_sequences_from_fasta(args.fasta_input_2)
+        else:
+            fmt2 = args.format_2 or args.format
+            ext2 = args.extension_2 if args.extension_2 is not None else args.extension
+            print(f"Collecting sequences from {args.structure_path_2} ...")
+            records2 = collect_sequences(args.structure_path_2, fmt2, ext2)
         print(f"Found {len(records2)} sequences (set 2)")
 
         if args.window_size is not None:
@@ -438,7 +477,7 @@ def main() -> None:
         n_pairs = len(records) * len(records2)
         print(f"Computing cross alignments ({n_pairs} pairs) using {args.workers} workers ...")
         run_cross_alignments(records, records2, args.workers, args.identity_output, args.tmp_dir)
-    else:
+    elif not has_set2:
         n_pairs = len(records) * (len(records) - 1) // 2
         print(f"Computing pairwise alignments ({n_pairs} pairs) using {args.workers} workers ...")
         run_pairwise_alignments(records, args.workers, args.identity_output, args.tmp_dir)
