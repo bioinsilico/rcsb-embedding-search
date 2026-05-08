@@ -11,7 +11,7 @@ def split_fasta_by_length(fasta_path: str, threshold: int) -> None:
     sequences with length > *threshold* go to the ``-gt<threshold>`` file.
     """
     base, ext = os.path.splitext(fasta_path)
-    le_path = f"{base}-le{threshold}{ext}"
+    le_path = f"{base}-lt{threshold}{ext}"
     gt_path = f"{base}-gt{threshold}{ext}"
 
     le_count = 0
