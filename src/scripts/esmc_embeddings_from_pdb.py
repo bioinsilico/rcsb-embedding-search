@@ -54,19 +54,29 @@ def iter_chains(pdb_file):
         return
 
     mapping = res_to_letter_map()
-    # biotite starts a new "chain" whenever the residue id decreases (see
-    # get_chain_starts), so a single chain with non-monotonic residue numbering
-    # gets split into several segments that share the same chain id. Concatenate
-    # those segments (in order of appearance) into one sequence per chain id.
-    chains = {}
+    # biotite starts a new "chain" whenever the residue id decreases
+    # (get_chain_starts), so a single chain id can resolve to several disjoint
+    # segments. In this data those extra segments are distinct entities sharing the
+    # chain id (bound peptides flagged by an insertion code, His-tags, symmetry
+    # mates, or two mislabelled chains) rather than a renumbered continuation of one
+    # chain. Concatenating them would feed ESMC a chimeric, non-physical sequence, so
+    # a chain id that splits into more than one segment is skipped, not guessed.
+    segments = {}
     chain_starts = get_chain_starts(atom_array, add_exclusive_stop=True)
     for i in range(len(chain_starts) - 1):
         chain_array = atom_array[chain_starts[i]:chain_starts[i + 1]]
         _, res_names = get_residues(chain_array)
-        letters = [mapping.get(name, 'X') for name in res_names]
-        chains.setdefault(chain_array.chain_id[0], []).extend(letters)
-    for chain_id, letters in chains.items():
-        yield chain_id, ''.join(letters)
+        seq = ''.join(mapping.get(name, 'X') for name in res_names)
+        segments.setdefault(str(chain_array.chain_id[0]), []).append(seq)
+    for chain_id, segs in segments.items():
+        if len(segs) > 1:
+            logger.warning(
+                f"{os.path.basename(pdb_file)}: chain {chain_id!r} resolves to "
+                f"{len(segs)} disjoint segments (sizes {[len(s) for s in segs]}) "
+                f"- skipping (likely distinct entities sharing a chain id)"
+            )
+            continue
+        yield chain_id, segs[0]
 
 
 if __name__ == '__main__':
