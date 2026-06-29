@@ -65,6 +65,9 @@ if __name__ == '__main__':
     parser.add_argument('--pdb_path', type=str, required=True)
     parser.add_argument('--out_path', type=str, required=True)
     parser.add_argument('--device', type=str, default='cpu')
+    parser.add_argument('--ignore_chain_id', action='store_true',
+                        help='Omit the chain id from output filenames; fail if a '
+                             'structure has more than one chain.')
     args = parser.parse_args()
 
     os.makedirs(args.out_path, exist_ok=True)
@@ -77,7 +80,14 @@ if __name__ == '__main__':
         pdb_file = os.path.join(args.pdb_path, pdb_name)
         stem = pdb_name.rsplit('.', 1)[0]
 
-        for chain_id, seq in iter_chains(pdb_file):
+        chains = list(iter_chains(pdb_file))
+        if args.ignore_chain_id and len(chains) > 1:
+            raise ValueError(
+                f"{pdb_name}: --ignore_chain_id set but structure has "
+                f"{len(chains)} chains ({', '.join(c for c, _ in chains)})"
+            )
+
+        for chain_id, seq in chains:
             with torch.inference_mode():
                 protein_tensor = client.encode(ESMProtein(sequence=seq))
                 output = client.logits(
@@ -86,7 +96,10 @@ if __name__ == '__main__':
                 )
             # drop BOS/EOS → (L, hidden)
             embedding = output.embeddings.squeeze(0)[1:-1].cpu()
-            name = f"{stem}.{chain_id}" if chain_id.strip() else stem
+            if args.ignore_chain_id or not chain_id.strip():
+                name = stem
+            else:
+                name = f"{stem}.{chain_id}"
             out_file = os.path.join(args.out_path, f"{name}.pt")
             torch.save(embedding, out_file)
             logger.info(f"{name} {tuple(embedding.shape)} -> {out_file}")
