@@ -1,12 +1,19 @@
 from __future__ import annotations
 
 import argparse
+import functools
 import logging
 import os
 
 import torch
 import biotite.structure.io.pdb as pdb
-from biotite.structure import to_sequence, filter_polymer, filter_amino_acids, BadStructureError
+from biotite.structure import (
+    filter_polymer,
+    filter_amino_acids,
+    get_chain_starts,
+    get_residues,
+)
+from biotite.structure.info import get_ccd
 
 from esm.models.esmc import ESMC
 from esm.sdk.api import ESMProtein, LogitsConfig
@@ -14,14 +21,41 @@ from esm.sdk.api import ESMProtein, LogitsConfig
 logger = logging.getLogger(__name__)
 
 
+@functools.lru_cache(maxsize=1)
+def res_to_letter_map():
+    """3-letter residue code -> 1-letter code, using each residue's own
+    one_letter_code or its mon_nstd_parent_comp_id's. Missing entries map to 'X'."""
+    chem_comp = get_ccd()['chem_comp']
+    ids = chem_comp['id'].as_array()
+    letters = chem_comp['one_letter_code'].as_array()
+    parents = chem_comp['mon_nstd_parent_comp_id'].as_array()
+
+    direct = {code: letter for code, letter in zip(ids, letters)
+              if len(letter) == 1 and letter != '?'}
+    mapping = dict(direct)
+    for code, parent in zip(ids, parents):
+        if code in mapping:
+            continue
+        if parent in direct:
+            mapping[code] = direct[parent]
+    return mapping
+
+
 def iter_chains(pdb_file):
     pdb_struct = pdb.PDBFile.read(pdb_file)
     atom_array = pdb_struct.get_structure(model=1)
     atom_array = atom_array[filter_polymer(atom_array)]
     atom_array = atom_array[filter_amino_acids(atom_array)]
-    sequences, chain_starts = to_sequence(atom_array)
-    for seq, start_idx in zip(sequences, chain_starts):
-        yield atom_array.chain_id[start_idx], str(seq)
+    if len(atom_array) == 0:
+        return
+
+    mapping = res_to_letter_map()
+    chain_starts = get_chain_starts(atom_array, add_exclusive_stop=True)
+    for i in range(len(chain_starts) - 1):
+        chain_array = atom_array[chain_starts[i]:chain_starts[i + 1]]
+        _, res_names = get_residues(chain_array)
+        seq = ''.join(mapping.get(name, 'X') for name in res_names)
+        yield chain_array.chain_id[0], seq
 
 
 if __name__ == '__main__':
@@ -42,13 +76,8 @@ if __name__ == '__main__':
             continue
         pdb_file = os.path.join(args.pdb_path, pdb_name)
         stem = pdb_name.rsplit('.', 1)[0]
-        try:
-            chains = list(iter_chains(pdb_file))
-        except BadStructureError as e:
-            logger.warning(f"Skipping {pdb_name}: {e}")
-            continue
 
-        for chain_id, seq in chains:
+        for chain_id, seq in iter_chains(pdb_file):
             with torch.inference_mode():
                 protein_tensor = client.encode(ESMProtein(sequence=seq))
                 output = client.logits(
