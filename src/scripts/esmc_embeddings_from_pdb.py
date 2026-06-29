@@ -44,7 +44,11 @@ def res_to_letter_map():
 def iter_chains(pdb_file):
     pdb_struct = pdb.PDBFile.read(pdb_file)
     atom_array = pdb_struct.get_structure(model=1)
-    atom_array = atom_array[filter_polymer(atom_array)]
+    # min_size=1: with the default min_size=2, filter_polymer silently drops chain
+    # residues that gappy/non-monotonic numbering isolates into 1-residue segments
+    # (~1.4k files in the CATH set, ~600 of them mid-chain). min_size=1 keeps them
+    # while still filtering out non-peptide entities.
+    atom_array = atom_array[filter_polymer(atom_array, min_size=1)]
     atom_array = atom_array[filter_amino_acids(atom_array)]
     if len(atom_array) == 0:
         return
@@ -87,7 +91,15 @@ if __name__ == '__main__':
         pdb_file = os.path.join(args.pdb_path, pdb_name)
         stem = pdb_name.rsplit('.', 1)[0]
 
-        chains = list(iter_chains(pdb_file))
+        try:
+            chains = list(iter_chains(pdb_file))
+        except Exception as e:
+            # e.g. empty/corrupt files ("0 models" ValueError) — skip, don't abort.
+            logger.warning(f"Skipping {pdb_name}: {type(e).__name__}: {e}")
+            continue
+        if not chains:
+            logger.warning(f"Skipping {pdb_name}: no amino-acid chains")
+            continue
         if args.ignore_chain_id and len(chains) > 1:
             raise ValueError(
                 f"{pdb_name}: --ignore_chain_id set but structure has "
