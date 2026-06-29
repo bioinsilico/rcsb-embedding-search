@@ -50,12 +50,19 @@ def iter_chains(pdb_file):
         return
 
     mapping = res_to_letter_map()
+    # biotite starts a new "chain" whenever the residue id decreases (see
+    # get_chain_starts), so a single chain with non-monotonic residue numbering
+    # gets split into several segments that share the same chain id. Concatenate
+    # those segments (in order of appearance) into one sequence per chain id.
+    chains = {}
     chain_starts = get_chain_starts(atom_array, add_exclusive_stop=True)
     for i in range(len(chain_starts) - 1):
         chain_array = atom_array[chain_starts[i]:chain_starts[i + 1]]
         _, res_names = get_residues(chain_array)
-        seq = ''.join(mapping.get(name, 'X') for name in res_names)
-        yield chain_array.chain_id[0], seq
+        letters = [mapping.get(name, 'X') for name in res_names]
+        chains.setdefault(chain_array.chain_id[0], []).extend(letters)
+    for chain_id, letters in chains.items():
+        yield chain_id, ''.join(letters)
 
 
 if __name__ == '__main__':
