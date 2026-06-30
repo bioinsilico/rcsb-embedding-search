@@ -1,8 +1,11 @@
 import math
+from collections import OrderedDict
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+from networks.layers import ResBlock
 
 
 # Standard amino acid alphabet + special tokens
@@ -54,7 +57,12 @@ class SequenceAutoencoder(nn.Module):
     Architecture
     ------------
     Encoder:  AA embedding + positional encoding → TransformerEncoder
-              → mean pooling (masked) → linear projection → L2 normalize
+              → pooling (masked) → projection → L2 normalize
+
+              Pooling strategy depends on ``res_block_layers``:
+              - 0 (default): mean pooling → LayerNorm → Linear
+              - >0: summation pooling → N × ResBlock → Linear
+
     Decoder:  latent → linear expansion to d_model → (1-token memory)
               Positional queries → TransformerDecoder cross-attending to memory
               → linear → vocab logits
@@ -73,11 +81,13 @@ class SequenceAutoencoder(nn.Module):
         max_seq_len: int = 2048,
         vocab_size: int = AA_VOCAB_SIZE,
         pad_idx: int = AA_PAD_IDX,
+        res_block_layers: int = 0,
     ):
         super().__init__()
         self.d_model = d_model
         self.latent_dim = latent_dim
         self.pad_idx = pad_idx
+        self.res_block_layers = res_block_layers
 
         # --- Shared layers ---
         self.aa_embedding = nn.Embedding(vocab_size, d_model, padding_idx=pad_idx)
@@ -92,15 +102,29 @@ class SequenceAutoencoder(nn.Module):
             batch_first=True,
         )
         self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_encoder_layers)
-        self.to_latent = nn.Sequential(
-            nn.LayerNorm(d_model),
-            nn.Linear(d_model, latent_dim),
-        )
+
+        if res_block_layers == 0:
+            # Mean pooling → LayerNorm → Linear
+            self.to_latent = nn.Sequential(
+                nn.LayerNorm(d_model),
+                nn.Linear(d_model, latent_dim),
+            )
+        else:
+            # Summation pooling → ResBlocks → Linear
+            layers = OrderedDict([
+                (f'block{i}', ResBlock(d_model, d_model, self.dropout))
+                for i in range(res_block_layers)
+            ])
+            layers['dropout'] = nn.Dropout(p=self.dropout)
+            layers['linear'] = nn.Linear(d_model, latent_dim)
+            layers['activation'] = nn.ReLU()
+            self.to_latent = nn.Sequential(layers)
 
         # --- Decoder ---
         self.from_latent = nn.Linear(latent_dim, d_model)
-        self.decoder_pos_encoding = SinusoidalPositionalEncoding(d_model, max_seq_len, self.dropout)
-        self.decoder_query_embed = nn.Embedding(vocab_size, d_model, padding_idx=pad_idx)
+        # Learned position queries — the only input the decoder needs at inference
+        # is the target length; no ground-truth tokens required.
+        self.decoder_queries = nn.Embedding(max_seq_len, d_model)
         decoder_layer = nn.TransformerDecoderLayer(
             d_model=d_model,
             nhead=nhead,
@@ -128,40 +152,43 @@ class SequenceAutoencoder(nn.Module):
         x = self.pos_encoding(self.aa_embedding(tokens))
         x = self.encoder(x, src_key_padding_mask=pad_mask)
 
-        # Mean pooling over non-padded positions
+        # Zero-out padding positions before pooling
         valid = (~pad_mask).unsqueeze(-1).float()  # (B, L, 1)
-        pooled = (x * valid).sum(dim=1) / valid.sum(dim=1).clamp(min=1)
+        if self.res_block_layers == 0:
+            # Mean pooling
+            pooled = (x * valid).sum(dim=1) / valid.sum(dim=1).clamp(min=1)
+        else:
+            # Summation pooling
+            pooled = (x * valid).sum(dim=1)
 
         latent = self.to_latent(pooled)
         return F.normalize(latent, dim=-1)
 
-    def decode(self, latent: torch.Tensor, tokens: torch.Tensor) -> torch.Tensor:
-        """Decode latent vector back to per-position vocabulary logits.
+    def decode(self, latent: torch.Tensor, seq_len: int) -> torch.Tensor:
+        """Decode a latent vector into per-position vocabulary logits.
 
-        Uses teacher forcing: the decoder receives the true input tokens
-        (shifted) so it can learn to reconstruct. At inference time one can
-        replace this with autoregressive sampling.
+        Fully non-autoregressive: the decoder uses learned position queries
+        and cross-attends to the latent vector.  No ground-truth tokens are
+        needed, so the same call works identically during training and inference.
 
         Args:
-            latent: (B, latent_dim) from :meth:`encode`.
-            tokens: (B, L) ground-truth token indices (teacher forcing).
+            latent: (B, latent_dim) L2-normalized embedding from :meth:`encode`.
+            seq_len: number of positions to decode (typically the input length
+                     during training; a desired output length at inference).
 
         Returns:
-            (B, L, vocab_size) logits over the amino acid vocabulary.
+            (B, seq_len, vocab_size) logits over the amino acid vocabulary.
         """
-        pad_mask = self._pad_mask(tokens)
+        B = latent.size(0)
 
-        # Memory: expand latent to a single-token sequence for cross-attention
+        # Memory: the latent as a single-token sequence for cross-attention
         memory = self.from_latent(latent).unsqueeze(1)  # (B, 1, d_model)
 
-        # Target queries: embed tokens + positional encoding
-        tgt = self.decoder_pos_encoding(self.decoder_query_embed(tokens))
+        # Position queries: (B, seq_len, d_model) — no target tokens needed
+        positions = torch.arange(seq_len, device=latent.device)
+        tgt = self.decoder_queries(positions).unsqueeze(0).expand(B, -1, -1)
 
-        out = self.decoder(
-            tgt,
-            memory,
-            tgt_key_padding_mask=pad_mask,
-        )
+        out = self.decoder(tgt, memory)
         return self.output_proj(out)
 
     def forward(
@@ -178,7 +205,7 @@ class SequenceAutoencoder(nn.Module):
             latent: (B, latent_dim) L2-normalized embedding.
         """
         latent = self.encode(tokens)
-        logits = self.decode(latent, tokens)
+        logits = self.decode(latent, tokens.size(1))
         return logits, latent
 
     def embedding(self, tokens: torch.Tensor) -> torch.Tensor:

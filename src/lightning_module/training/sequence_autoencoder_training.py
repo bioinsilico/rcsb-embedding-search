@@ -1,9 +1,12 @@
+import pathlib
 import lightning as L
 import torch
+import yaml
+from omegaconf import OmegaConf
 from torch import nn, optim, cat
 from torcheval.metrics.functional import binary_auprc, binary_auroc
 
-from config.schema_config import TrainingConfig
+from config.schema_config import TrainingConfig, Strategy, LrInterval
 from lightning_module.utils import get_cosine_schedule_with_warmup
 from networks.sequence_autoencoder import AA_PAD_IDX
 
@@ -63,6 +66,29 @@ class LitSequenceAutoencoderTraining(L.LightningModule):
     def on_fit_start(self):
         self.z = torch.empty(0).to(self.device)
         self.z_pred = torch.empty(0).to(self.device)
+        if self.cfg is not None and hasattr(self.logger.experiment, 'add_text'):
+            yaml.add_representer(pathlib.PurePosixPath, lambda d, v: d.represent_str(str(v)))
+            yaml.add_representer(pathlib.PosixPath, lambda d, v: d.represent_str(str(v)))
+            yaml.add_representer(pathlib.WindowsPath, lambda d, v: d.represent_str(str(v)))
+            yaml.add_representer(Strategy, lambda d, v: d.represent_str(str(v)))
+            yaml.add_representer(LrInterval, lambda d, v: d.represent_str(str(v)))
+
+            total_params = sum(p.numel() for p in self.model.parameters())
+            trainable_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
+            config = OmegaConf.to_container(self.cfg, resolve=True)
+            config['model_parameters'] = f"{trainable_params}/{total_params}"
+            config_text = yaml.dump(config)
+            self.logger.experiment.add_text(
+                "Config",
+                config_text
+            )
+        if hasattr(self.logger.experiment, 'add_graph'):
+            try:
+                dummy = torch.ones(1, 16, dtype=torch.long, device=self.device)
+                with torch.no_grad():
+                    self.logger.experiment.add_graph(self.model, dummy)
+            except Exception:
+                pass
 
     # ------------------------------------------------------------------
     # Shared step logic

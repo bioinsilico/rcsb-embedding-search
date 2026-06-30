@@ -1,13 +1,14 @@
 import logging
 import signal
 
+import torch
 import hydra
 import lightning as L
 from hydra.core.config_store import ConfigStore
 from hydra.utils import instantiate
 from lightning import seed_everything
 from lightning.pytorch.plugins.environments import SLURMEnvironment
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 
 from config.schema_config import TrainingConfig
 from config.utils import get_config_path
@@ -24,19 +25,20 @@ cs.store(name="training_default", node=TrainingConfig)
 logger = logging.getLogger(__name__)
 
 
-@hydra.main(version_base=None, config_path="../../config", config_name="sequence_autoencoder_config")
+@hydra.main(version_base=None, config_path="../../config", config_name="training_config")
 def main(cfg: TrainingConfig):
     logger.info(f"Using config file: {get_config_path()}")
     seed_everything(cfg.global_seed, workers=True)
 
+    meta = cfg.metadata or {}
     training_set = SequenceIdentityDataset(
         fasta_file=cfg.training_set.data_path,
         identity_file=cfg.training_set.tm_score_file,
-        score_method=fraction_score_of(
-            f=cfg.metadata.fraction_score if cfg.metadata is not None and 'fraction_score' in cfg.metadata else 10
-        ),
+        score_method=fraction_score_of(f=meta.get('fraction_score', 10)),
         weighting_method=tm_score_weights(cfg.training_set.tm_score_intervals, 1),
-        exclude_ids_file=cfg.metadata.exclude_domains_file if cfg.metadata is not None and 'exclude_domains_file' in cfg.metadata else None,
+        exclude_ids_file=meta.get('exclude_domains_file', None),
+        max_pairs=meta.get('max_pairs', None),
+        n_intervals=cfg.training_set.tm_score_intervals,
     )
 
     weights = training_set.weights()
@@ -55,12 +57,10 @@ def main(cfg: TrainingConfig):
         collate_fn=collate_sequence_pairs,
     )
 
-    validation_set = SequenceIdentityDataset(
-        fasta_file=cfg.validation_set.data_path,
-        identity_file=cfg.validation_set.tm_score_file,
-    )
+    val_size = cfg.metadata.validation_size if cfg.metadata is not None and 'validation_size' in cfg.metadata else len(training_set)
+    val_indices = torch.randperm(len(training_set))[:val_size].tolist()
     validation_dataloader = DataLoader(
-        dataset=validation_set,
+        dataset=Subset(training_set, val_indices),
         batch_size=cfg.validation_set.batch_size,
         num_workers=cfg.validation_set.workers,
         persistent_workers=True if cfg.validation_set.workers > 0 else False,
