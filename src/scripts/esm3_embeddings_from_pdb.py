@@ -15,13 +15,13 @@ from esm.sdk.api import ESM3InferenceClient, ESMProtein, SamplingConfig
 from esm.utils.constants.models import ESM3_OPEN_SMALL
 
 from dataset.esm3_embeddings_from_coord_dataset import EsmEmbeddingFromPdbDataset
+from scripts.chain_segments import disjoint_segment_sizes
 
 d_type = np.float32
 logger = logging.getLogger(__name__)
 
 
 if __name__ == '__main__':
-    import config.logging_config
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--pdb_path', type=str, required=True)
@@ -43,6 +43,16 @@ if __name__ == '__main__':
 
     for s in dataloader:
         pdb_file = s[1][0]
+        # ProteinChain.from_pdb concatenates every residue of the detected chain in
+        # file order; if that chain id covers disjoint segments (distinct entities
+        # sharing the id) the sequence is chimeric. Skip those rather than embed noise.
+        sizes = disjoint_segment_sizes(pdb_file)
+        if sizes:
+            logger.warning(
+                f"{s[0][0]}: chain resolves to {len(sizes)} disjoint segments "
+                f"(sizes {sizes}) - skipping (likely distinct entities sharing a chain id)"
+            )
+            continue
         protein_chain = ProteinChain.from_pdb(pdb_file)
         if args.only_sequence:
             protein = ESMProtein(sequence=protein_chain.sequence)

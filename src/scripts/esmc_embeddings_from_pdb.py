@@ -7,16 +7,13 @@ import os
 
 import torch
 import biotite.structure.io.pdb as pdb
-from biotite.structure import (
-    filter_polymer,
-    filter_amino_acids,
-    get_chain_starts,
-    get_residues,
-)
+from biotite.structure import filter_polymer, filter_amino_acids, get_residues
 from biotite.structure.info import get_ccd
 
 from esm.models.esmc import ESMC
 from esm.sdk.api import ESMProtein, LogitsConfig
+
+from scripts.chain_segments import segment_chains_by_id
 
 logger = logging.getLogger(__name__)
 
@@ -54,29 +51,21 @@ def iter_chains(pdb_file):
         return
 
     mapping = res_to_letter_map()
-    # biotite starts a new "chain" whenever the residue id decreases
-    # (get_chain_starts), so a single chain id can resolve to several disjoint
-    # segments. In this data those extra segments are distinct entities sharing the
-    # chain id (bound peptides flagged by an insertion code, His-tags, symmetry
-    # mates, or two mislabelled chains) rather than a renumbered continuation of one
-    # chain. Concatenating them would feed ESMC a chimeric, non-physical sequence, so
-    # a chain id that splits into more than one segment is skipped, not guessed.
-    segments = {}
-    chain_starts = get_chain_starts(atom_array, add_exclusive_stop=True)
-    for i in range(len(chain_starts) - 1):
-        chain_array = atom_array[chain_starts[i]:chain_starts[i + 1]]
-        _, res_names = get_residues(chain_array)
-        seq = ''.join(mapping.get(name, 'X') for name in res_names)
-        segments.setdefault(str(chain_array.chain_id[0]), []).append(seq)
-    for chain_id, segs in segments.items():
+    # A single chain id can resolve to several disjoint segments (see
+    # segment_chains_by_id): distinct entities sharing the id rather than one
+    # renumbered chain. Concatenating them would feed ESMC a chimeric, non-physical
+    # sequence, so a chain id that splits into more than one segment is skipped.
+    for chain_id, segs in segment_chains_by_id(atom_array).items():
         if len(segs) > 1:
             logger.warning(
                 f"{os.path.basename(pdb_file)}: chain {chain_id!r} resolves to "
-                f"{len(segs)} disjoint segments (sizes {[len(s) for s in segs]}) "
+                f"{len(segs)} disjoint segments "
+                f"(sizes {[len(get_residues(s)[0]) for s in segs]}) "
                 f"- skipping (likely distinct entities sharing a chain id)"
             )
             continue
-        yield chain_id, segs[0]
+        _, res_names = get_residues(segs[0])
+        yield chain_id, ''.join(mapping.get(name, 'X') for name in res_names)
 
 
 if __name__ == '__main__':
