@@ -11,6 +11,7 @@ from torch.utils.data import DataLoader
 
 from config.utils import get_config_path
 from dataset.tm_score_from_embeddings_dataset import TmScoreFromEmbeddingsDataset
+from dataset.packed_tm_score_from_embeddings_dataset import PackedTmScoreFromEmbeddingsDataset
 from dataset.utils.custom_weighted_random_sampler import CustomWeightedRandomSampler
 from dataset.utils.tm_score_weight import fraction_score_of, tm_score_weights
 from dataset.utils.tools import collate_fn
@@ -30,15 +31,31 @@ logger = logging.getLogger(__name__)
 def main(cfg: TrainingConfig):
     logger.info(f"Using config file: {get_config_path()}")
     seed_everything(cfg.global_seed, workers=True)
-    training_set = TmScoreFromEmbeddingsDataset(
-        tm_score_file=cfg.training_set.tm_score_file,
-        embedding_path=cfg.training_set.data_path,
-        score_method=fraction_score_of(
-            f=cfg.metadata.fraction_score if cfg.metadata is not None and 'fraction_score' in cfg.metadata else 10
-        ),
-        weighting_method=tm_score_weights(cfg.training_set.tm_score_intervals, 0.25),
-        exclude_domains_file=cfg.metadata.exclude_domains_file if cfg.metadata is not None and 'exclude_domains_file' in cfg.metadata else None
+    score_method = fraction_score_of(
+        f=cfg.metadata.fraction_score if cfg.metadata is not None and 'fraction_score' in cfg.metadata else 10
     )
+    weighting_method = tm_score_weights(cfg.training_set.tm_score_intervals, 0.25)
+    exclude_domains_file = cfg.metadata.exclude_domains_file if cfg.metadata is not None and 'exclude_domains_file' in cfg.metadata else None
+
+    packed_path = getattr(cfg.training_set, 'packed_path', None)
+    if packed_path is not None:
+        logger.info(f"Using packed embedding store for training set: {packed_path}")
+        training_set = PackedTmScoreFromEmbeddingsDataset(
+            tm_score_file=cfg.training_set.tm_score_file,
+            store_dir=packed_path,
+            score_method=score_method,
+            weighting_method=weighting_method,
+            exclude_domains_file=exclude_domains_file,
+            local_scratch=getattr(cfg.training_set, 'local_scratch', None)
+        )
+    else:
+        training_set = TmScoreFromEmbeddingsDataset(
+            tm_score_file=cfg.training_set.tm_score_file,
+            embedding_path=cfg.training_set.data_path,
+            score_method=score_method,
+            weighting_method=weighting_method,
+            exclude_domains_file=exclude_domains_file
+        )
 
     weights = training_set.weights()
     sampler = CustomWeightedRandomSampler(
@@ -56,10 +73,19 @@ def main(cfg: TrainingConfig):
         collate_fn=collate_fn
     )
 
-    validation_set = TmScoreFromEmbeddingsDataset(
-        tm_score_file=cfg.validation_set.tm_score_file,
-        embedding_path=cfg.validation_set.data_path
-    )
+    validation_packed_path = getattr(cfg.validation_set, 'packed_path', None)
+    if validation_packed_path is not None:
+        logger.info(f"Using packed embedding store for validation set: {validation_packed_path}")
+        validation_set = PackedTmScoreFromEmbeddingsDataset(
+            tm_score_file=cfg.validation_set.tm_score_file,
+            store_dir=validation_packed_path,
+            local_scratch=getattr(cfg.validation_set, 'local_scratch', None)
+        )
+    else:
+        validation_set = TmScoreFromEmbeddingsDataset(
+            tm_score_file=cfg.validation_set.tm_score_file,
+            embedding_path=cfg.validation_set.data_path
+        )
     validation_dataloader = DataLoader(
         dataset=validation_set,
         batch_size=cfg.validation_set.batch_size,

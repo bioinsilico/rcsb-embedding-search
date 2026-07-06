@@ -70,6 +70,13 @@ class TMScoreDataset:
     fraction_score: Optional[int] = 10
     tm_score_intervals: Optional[int] = 5
     neighbor_path: Optional[Path] = None
+    # Optional packed/memory-mapped embedding store (see
+    # scripts/build_packed_embeddings.py). When set, embeddings are served from
+    # this store instead of reading one {domain}.pt per sample from data_path.
+    packed_path: Optional[Path] = None
+    # Optional node-local staging dir for the packed store ("auto" resolves
+    # $SLURM_TMPDIR/$TMPDIR//tmp). Ignored unless packed_path is set.
+    local_scratch: Optional[str] = None
 
 
 @dataclass
