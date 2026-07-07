@@ -72,8 +72,8 @@ class TmScoreFromEmbeddingsDataset(Dataset):
         embedding_j = row_j['embedding'].values[0]
 
         return (
-            torch.load(embedding_i),
-            torch.load(embedding_j),
+            torch.load(embedding_i, map_location=torch.device('cpu')),
+            torch.load(embedding_j, map_location=torch.device('cpu')),
             torch.from_numpy(
                 np.array(self.score_method(self.class_pairs.iloc[idx]['score']), dtype=d_type)
             )
