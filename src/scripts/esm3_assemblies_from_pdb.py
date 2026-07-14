@@ -19,7 +19,7 @@ from scripts.esm3_embeddings_from_cif import rename_atom_attr
 
 logger = logging.getLogger(__name__)
 
-def compute_embedding_for_file(pdb_file: str, model: ESM3, out_path: str):
+def compute_embedding_for_file(pdb_file: str, model: ESM3, out_path: str, only_sequence: bool):
     pdb_id, ext = os.path.splitext(pdb_file)
     pdb_id = os.path.basename(pdb_id)
     out_file = os.path.join(out_path, f"{pdb_id}.pt")
@@ -47,7 +47,10 @@ def compute_embedding_for_file(pdb_file: str, model: ESM3, out_path: str):
                 raise ValueError("Inconsistent chain ids")
             atom_res = rename_atom_attr(atom_res)
             protein_chain = ProteinChain.from_atomarray(atom_res)
-            protein = ESMProtein.from_protein_chain(protein_chain)
+            if only_sequence:
+                protein = ESMProtein(sequence=protein_chain.sequence)
+            else:
+                protein = ESMProtein.from_protein_chain(protein_chain)
 
             protein_tensor = model.encode(protein)  # stays on model device
             output = model.forward_and_sample(
@@ -64,7 +67,7 @@ def compute_embedding_for_file(pdb_file: str, model: ESM3, out_path: str):
         logger.info(f"{pdb_id} {assembly_embedding.shape}")
         torch.save(assembly_embedding, out_file)
 
-def _per_gpu_worker(rank: int, files: List[str], out_path: str, model_name: str):
+def _per_gpu_worker(rank: int, files: List[str], out_path: str, model_name: str, only_sequence: bool):
     # Constrain CPU threading to avoid thrash when multiple GPU processes run.
     os.environ.setdefault("OMP_NUM_THREADS", "1")
     os.environ.setdefault("MKL_NUM_THREADS", "1")
@@ -76,7 +79,7 @@ def _per_gpu_worker(rank: int, files: List[str], out_path: str, model_name: str)
 
     for pdb_file in files:
         try:
-            compute_embedding_for_file(pdb_file, model, out_path)
+            compute_embedding_for_file(pdb_file, model, out_path, only_sequence)
         except Exception as e:
             logger.error(f"Failed {pdb_file} on gpu:{rank}: {e}")
 
@@ -92,6 +95,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--pdb_path", type=str, required=True)
     parser.add_argument("--out_path", type=str, required=True)
+    parser.add_argument('--only_sequence', action='store_true')
     parser.add_argument("--n-device", type=int, default=1)
     args = parser.parse_args()
 
@@ -109,7 +113,7 @@ if __name__ == "__main__":
             continue
         p = ctx.Process(
             target=_per_gpu_worker,
-            args=(rank, rank_files, args.out_path, ESM3_OPEN_SMALL),
+            args=(rank, rank_files, args.out_path, ESM3_OPEN_SMALL, args.only_sequence),
             daemon=False,
         )
         p.start()
