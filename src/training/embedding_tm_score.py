@@ -3,6 +3,7 @@ import signal
 
 import hydra
 import lightning as L
+import torch
 from hydra.core.config_store import ConfigStore
 from hydra.utils import instantiate
 from lightning import seed_everything
@@ -28,6 +29,10 @@ logger = logging.getLogger(__name__)
 
 @hydra.main(version_base=None, config_path="../../config", config_name="training_config")
 def main(cfg: TrainingConfig):
+
+    torch.set_float32_matmul_precision('high')
+    logger.info("Setting float32 matmul precision to high")
+
     logger.info(f"Using config file: {get_config_path()}")
     seed_everything(cfg.global_seed, workers=True)
     training_set = TmScoreFromEmbeddingsDataset(
