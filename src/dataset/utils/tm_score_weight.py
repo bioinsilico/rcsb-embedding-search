@@ -89,9 +89,22 @@ def fraction_score(score):
     return round(10 * score) / 10
 
 
+class FractionScore:
+    """Snap a score to a 1/f grid.
+
+    A module-level class rather than a closure so that datasets holding it stay
+    picklable, which dataloader workers require whenever multiprocessing uses
+    the ``spawn`` start method (the default on macOS).
+    """
+
+    def __init__(self, f=10):
+        self.f = f
+
+    def __call__(self, score):
+        return round(self.f * score) / self.f
+
+
 def fraction_score_of(f=10):
     logger.info(f"Using fraction score of {f}")
-    def __fraction_score(score):
-        return round(f * score) / f
-    return __fraction_score
+    return FractionScore(f)
 
