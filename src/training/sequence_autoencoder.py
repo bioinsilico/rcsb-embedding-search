@@ -78,10 +78,16 @@ def main(cfg: TrainingConfig):
         cfg=cfg,
     )
 
+    # Monitor the thresholded metric: pr_auc against continuous targets can sit
+    # at a constant value for a whole run, which leaves ModelCheckpoint holding
+    # an early epoch forever.  save_last keeps the final weights regardless of
+    # what the monitor decides, so a wall-clock kill cannot lose the run.
+    monitor = LitSequenceAutoencoderTraining.PR_AUC_BIN_METRIC_NAME
     checkpoint_callback = L.pytorch.callbacks.ModelCheckpoint(
-        monitor=LitSequenceAutoencoderTraining.PR_AUC_METRIC_NAME,
+        monitor=monitor,
         mode='max',
-        filename='{epoch}-{' + LitSequenceAutoencoderTraining.PR_AUC_METRIC_NAME + ':.2f}',
+        save_last=True,
+        filename='{epoch}-{' + monitor + ':.2f}',
     )
 
     lr_monitor = L.pytorch.callbacks.LearningRateMonitor(
@@ -103,6 +109,8 @@ def main(cfg: TrainingConfig):
         plugins=[SLURMEnvironment(requeue_signal=signal.SIGUSR1)],
         default_root_dir=cfg.default_root_dir,
         logger=logger_tb,
+        # Bounds the loss spikes seen mid-run; 0 disables clipping.
+        gradient_clip_val=meta.get('gradient_clip_val', 1.0),
     )
     trainer.fit(
         model,

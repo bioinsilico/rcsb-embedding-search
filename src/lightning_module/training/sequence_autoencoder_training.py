@@ -234,18 +234,30 @@ class LitSequenceAutoencoderTraining(L.LightningModule):
                 roc_auc = binary_auroc(z_pred, z)
             self.log(self.ROC_AUC_METRIC_NAME, roc_auc, sync_dist=True)
 
-            # Same metrics on a thresholded target — interpretable, and only
-            # defined when the validation stream contains both classes.
+            # Same metrics on a thresholded target — interpretable, and the
+            # checkpoint monitor.  A degenerate epoch (every target on one side
+            # of the threshold) has no meaningful value, but it must still be
+            # logged: ModelCheckpoint errors out on a missing monitor, and under
+            # DDP a metric logged by only some ranks desynchronises the
+            # sync_dist reduction.  Zero is the right sentinel for mode='max' —
+            # an epoch we cannot score is never selected as the best one.
             z_bin = (z >= self.BINARY_THR).float()
             positives = int(z_bin.sum())
-            if 0 < positives < len(z_bin):
-                self.log(self.PR_AUC_BIN_METRIC_NAME,
-                         binary_auprc(z_pred, z_bin), sync_dist=True)
+            degenerate = not (0 < positives < len(z_bin))
+            zero = torch.zeros((), device=self.device)
+            if degenerate:
+                pr_bin, roc_bin = zero, zero
+            else:
+                pr_bin = binary_auprc(z_pred, z_bin)
                 if self.device.type == 'mps':
-                    roc_bin = binary_auroc(z_pred.to('cpu'), z_bin.to('cpu'))
+                    # torcheval returns float64 here, a dtype MPS cannot hold —
+                    # leave it on the CPU as float32 and let Lightning place it.
+                    roc_bin = binary_auroc(z_pred.to('cpu'), z_bin.to('cpu')).float()
                 else:
                     roc_bin = binary_auroc(z_pred, z_bin)
-                self.log(self.ROC_AUC_BIN_METRIC_NAME, roc_bin, sync_dist=True)
+            self.log(self.PR_AUC_BIN_METRIC_NAME, pr_bin, sync_dist=True)
+            self.log(self.ROC_AUC_BIN_METRIC_NAME, roc_bin, sync_dist=True)
+            self.log('val_frac_positive', z_bin.mean(), sync_dist=True)
         self._log_metrics(self.VALIDATION_LOSS_METRIC_NAME)
 
     # ------------------------------------------------------------------
