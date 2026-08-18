@@ -60,6 +60,28 @@ def _rank_identity() -> int:
     return int(node) * _LOCAL_RANK_SPAN + int(local)
 
 
+def _world_size() -> int:
+    """Number of ranks in the job, resolved the same way as :func:`_rank_identity`.
+
+    ``samples_per_epoch`` is a whole-job figure, matching how ``epoch_size``
+    behaves for the map-style datasets (where ``DistributedSampler`` divides it),
+    so it has to be divided here.  Getting this wrong is expensive and silent —
+    falling back to 1 on a 32-rank job makes every epoch 32x longer and stretches
+    an epoch-indexed LR warmup by the same factor — so the resolved value is
+    logged once per rank on the first epoch.
+    """
+    if dist.is_available() and dist.is_initialized():
+        return dist.get_world_size()
+    for var in ('WORLD_SIZE', 'SLURM_NTASKS'):
+        value = os.environ.get(var)
+        if value is not None:
+            try:
+                return max(1, int(value))
+            except ValueError:
+                pass
+    return 1
+
+
 def _build_segment_index(
     fasta_file: str,
     segment_length: int,
@@ -189,8 +211,10 @@ class SequenceAlignmentIterableDataset(IterableDataset):
             ``segment_length``, i.e. non-overlapping windows; a smaller value
             makes them overlap.  A sequence whose length is not an exact fit
             gets one extra window anchored at its C-terminus.
-        samples_per_epoch: samples produced per epoch **per rank**, split evenly
-            across that rank's dataloader workers.
+        samples_per_epoch: samples produced per epoch across the **whole job**,
+            divided across ranks and then across each rank's dataloader workers.
+            This matches how ``epoch_size`` behaves for the map-style datasets,
+            so the same config value means the same thing in both.
         score_method: optional post-processing of the raw fraction, e.g.
             ``fraction_score_of(10)`` to snap it to a 0.1 grid.  Binning uses
             the post-processed score, i.e. the value the model is trained on.
@@ -261,8 +285,12 @@ class SequenceAlignmentIterableDataset(IterableDataset):
     def _shard(self) -> tuple[int, np.random.SeedSequence]:
         """Return ``(n_samples, seed_sequence)`` for the calling worker.
 
-        ``samples_per_epoch`` is split across the workers of this rank, with the
-        remainder handed to the lowest worker ids.
+        ``samples_per_epoch`` counts the whole job, so it is divided first
+        across ranks and then across that rank's dataloader workers, with the
+        per-worker remainder handed to the lowest worker ids.  Any remainder
+        from the rank division is dropped rather than assigned, because
+        :func:`_rank_identity` is not guaranteed to be contiguous; at realistic
+        sizes that is at most ``world_size - 1`` samples out of the epoch.
 
         The stream is keyed on ``(seed, rank, worker_id)`` so that no two
         processes anywhere in the job coincide — Lightning seeds every rank
@@ -279,9 +307,18 @@ class SequenceAlignmentIterableDataset(IterableDataset):
         worker_id, num_workers = (0, 1) if info is None else (info.id, info.num_workers)
         rank = _rank_identity()
 
-        n_samples = self.samples_per_epoch // num_workers
-        if worker_id < self.samples_per_epoch % num_workers:
+        world = _world_size()
+        per_rank = max(1, self.samples_per_epoch // world)
+        n_samples = per_rank // num_workers
+        if worker_id < per_rank % num_workers:
             n_samples += 1
+
+        if self._epoch == 0 and worker_id == 0:
+            logger.info(
+                f"Sharding {self.samples_per_epoch} samples/epoch over world_size={world} "
+                f"-> {per_rank} per rank over {num_workers} worker(s) "
+                f"-> {n_samples} for worker 0 (rank id {rank})"
+            )
 
         entropy = [self.seed, rank, worker_id]
         if not self.deterministic:
@@ -316,7 +353,7 @@ class SequenceAlignmentIterableDataset(IterableDataset):
 
     def __len__(self) -> int:
         """Samples this rank yields per epoch (across all of its workers)."""
-        return self.samples_per_epoch
+        return max(1, self.samples_per_epoch // _world_size())
 
     def __iter__(self):
         n_samples, seed_sequence = self._shard()

@@ -80,14 +80,26 @@ def main(cfg: TrainingConfig):
 
     # Monitor the thresholded metric: pr_auc against continuous targets can sit
     # at a constant value for a whole run, which leaves ModelCheckpoint holding
-    # an early epoch forever.  save_last keeps the final weights regardless of
-    # what the monitor decides, so a wall-clock kill cannot lose the run.
+    # an early epoch forever.  This callback tracks the best model only; keeping
+    # the newest weights is the rolling callback's job below.
     monitor = LitSequenceAutoencoderTraining.PR_AUC_BIN_METRIC_NAME
     checkpoint_callback = L.pytorch.callbacks.ModelCheckpoint(
         monitor=monitor,
         mode='max',
-        save_last=True,
-        filename='{epoch}-{' + monitor + ':.2f}',
+        filename='best-{epoch}-{' + monitor + ':.2f}',
+    )
+
+    # A monitored checkpoint only writes when the metric improves, and save_last
+    # is refreshed only alongside such a write — so neither preserves the newest
+    # weights once the monitor plateaus.  This second, unmonitored callback saves
+    # unconditionally on a step cadence, which is also the only granularity that
+    # protects a wall-clock-limited job when one epoch spans hours.  Resume from
+    # 'rolling.ckpt'.
+    rolling_callback = L.pytorch.callbacks.ModelCheckpoint(
+        monitor=None,
+        save_top_k=1,
+        every_n_train_steps=meta.get('checkpoint_every_n_steps', 1000),
+        filename='rolling',
     )
 
     lr_monitor = L.pytorch.callbacks.LearningRateMonitor(
@@ -105,7 +117,7 @@ def main(cfg: TrainingConfig):
         num_nodes=cfg.computing_resources.nodes,
         devices=cfg.computing_resources.devices,
         strategy=cfg.computing_resources.strategy,
-        callbacks=[checkpoint_callback, lr_monitor],
+        callbacks=[checkpoint_callback, rolling_callback, lr_monitor],
         plugins=[SLURMEnvironment(requeue_signal=signal.SIGUSR1)],
         default_root_dir=cfg.default_root_dir,
         logger=logger_tb,
