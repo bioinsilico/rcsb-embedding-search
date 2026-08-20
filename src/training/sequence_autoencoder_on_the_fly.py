@@ -42,6 +42,11 @@ def main(cfg: TrainingConfig):
     segment_length = meta.get('segment_length', 50)
     window_step = meta.get('window_step', None)
 
+    # Uniform pairing cannot reach related sequences: on CATH fewer than 0.02%
+    # of random window pairs align appreciably, so the balancer ends up filling
+    # its top bins with chance alignments.  p_kmer proposes pairs through a
+    # minimizer index and p_offset takes two windows of one sequence at a drawn
+    # offset; both change only which pairs are looked at, never the label.
     training_set = SequenceAlignmentIterableDataset(
         fasta_file=cfg.training_set.data_path,
         aligner=aligner,
@@ -53,6 +58,14 @@ def main(cfg: TrainingConfig):
         balance_alpha=meta.get('balance_alpha', 1.0),
         max_attempts=meta.get('max_attempts', 50),
         exclude_ids_file=meta.get('exclude_domains_file', None),
+        p_kmer=meta.get('p_kmer', 0.0),
+        p_offset=meta.get('p_offset', 0.0),
+        max_self_offset=meta.get('max_self_offset', None),
+        p_superfamily=meta.get('p_superfamily', 0.0),
+        superfamily_file=meta.get('superfamily_file', None),
+        kmer_size=meta.get('kmer_size', 6),
+        minimizer_window=meta.get('minimizer_window', 10),
+        reduced_alphabet=meta.get('reduced_alphabet', True),
         seed=cfg.global_seed,
         deterministic=False,
     )
@@ -70,6 +83,14 @@ def main(cfg: TrainingConfig):
         balance_alpha=meta.get('balance_alpha', 1.0),
         max_attempts=meta.get('max_attempts', 50),
         exclude_ids_file=meta.get('exclude_domains_file', None),
+        p_kmer=meta.get('p_kmer', 0.0),
+        p_offset=meta.get('p_offset', 0.0),
+        max_self_offset=meta.get('max_self_offset', None),
+        p_superfamily=meta.get('p_superfamily', 0.0),
+        superfamily_file=meta.get('superfamily_file', None),
+        # Same corpus and windowing, so window ids agree and the index -- the
+        # expensive part of startup -- is built once rather than twice.
+        kmer_index=training_set.kmer_index,
         seed=cfg.global_seed + 1,
         deterministic=True,
     )

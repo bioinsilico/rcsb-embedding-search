@@ -19,6 +19,8 @@ from torch.utils.data import DataLoader, IterableDataset, get_worker_info
 
 from dataset.sequence_identity_dataset import _load_exclude, collate_sequence_pairs
 from dataset.utils.alignment_scorer import AlignmentFractionScorer
+from dataset.utils.cath_superfamily import load_superfamilies, parse_cath_domain_id
+from dataset.utils.minimizer_index import MinimizerIndex
 from dataset.utils.tm_score_weight import fraction_score_of
 from networks.sequence_autoencoder import tokenize_sequence
 
@@ -87,6 +89,7 @@ def _build_segment_index(
     segment_length: int,
     window_step: int,
     exclude: set[str],
+    group_of=None,
 ) -> tuple[str, np.ndarray, np.ndarray, np.ndarray]:
     """Stream a FASTA file into a flat residue blob plus per-sequence offsets.
 
@@ -113,6 +116,7 @@ def _build_segment_index(
     """
     chunks: list[str] = []
     lengths: list[int] = []
+    groups: list[int] = []
     n_records = n_short = n_excluded = n_normalized = 0
 
     def add(header: str | None, parts: list[str]) -> None:
@@ -132,6 +136,9 @@ def _build_segment_index(
             n_normalized += 1
         chunks.append(seq)
         lengths.append(len(seq))
+        # Resolved here, while the header is still in hand: keeping 600k header
+        # strings alive just to group them later would cost far more memory.
+        groups.append(-1 if group_of is None else group_of(header))
 
     header: str | None = None
     parts: list[str] = []
@@ -167,7 +174,8 @@ def _build_segment_index(
         f"read {n_records}, dropped {n_short} shorter than {segment_length}, "
         f"excluded {n_excluded}, normalized non-standard residues in {n_normalized}"
     )
-    return ''.join(chunks), starts, n_grid, last_offset, window_counts
+    return (''.join(chunks), starts, n_grid, last_offset, window_counts,
+            np.asarray(groups, dtype=np.int64))
 
 
 class SequenceAlignmentIterableDataset(IterableDataset):
@@ -222,6 +230,26 @@ class SequenceAlignmentIterableDataset(IterableDataset):
         balance_alpha: balancing strength, ``0`` disables it.
         max_attempts: alignment budget per emitted sample.
         exclude_ids_file: optional file of FASTA headers to skip, one per line.
+        p_kmer: probability of proposing a pair via the minimizer index, which
+            is what makes genuinely related pairs reachable — uniform draws hit
+            an appreciable alignment in under 0.02% of cases on CATH.
+        p_offset: probability of proposing two windows of the same sequence at a
+            drawn offset, giving a guaranteed score gradient.  The remaining
+            probability mass proposes a uniform random pair.
+        p_superfamily: probability of proposing two domains of one CATH
+            homologous superfamily.  This is the only strategy that supplies
+            *real* remote homology (roughly the 15-60% identity band); the
+            minimizer index mostly surfaces near-duplicates.  Requires
+            ``superfamily_file``.
+        superfamily_file: CATH ``cath-domain-list.txt``, mapping domain ids to
+            their C.A.T.H classification.
+        max_self_offset: largest offset used by ``p_offset``; defaults to
+            ``segment_length``, which sweeps overlap from full to none.
+        kmer_index: a prebuilt :class:`MinimizerIndex` to share between the
+            training and validation datasets — they must use the same FASTA,
+            ``segment_length`` and ``window_step`` for window ids to agree.
+            Built internally when omitted and ``p_kmer > 0``.
+        kmer_size, minimizer_window, reduced_alphabet: index parameters.
         seed: base seed; combined with rank, worker id and epoch so that every
             worker on every rank of every node draws an independent stream.
         deterministic: replay the same stream on every epoch — use for the
@@ -243,6 +271,15 @@ class SequenceAlignmentIterableDataset(IterableDataset):
         balance_alpha: float = 1.0,
         max_attempts: int = 50,
         exclude_ids_file: str | None = None,
+        p_kmer: float = 0.0,
+        p_offset: float = 0.0,
+        p_superfamily: float = 0.0,
+        superfamily_file: str | None = None,
+        max_self_offset: int | None = None,
+        kmer_index: MinimizerIndex | None = None,
+        kmer_size: int = 6,
+        minimizer_window: int = 10,
+        reduced_alphabet: bool = True,
         seed: int = 42,
         deterministic: bool = False,
         log_every: int = 10_000,
@@ -263,20 +300,60 @@ class SequenceAlignmentIterableDataset(IterableDataset):
         self.n_intervals = int(n_intervals)
         self.balance_alpha = float(balance_alpha)
         self.max_attempts = max(1, int(max_attempts))
+        self.p_kmer = float(p_kmer)
+        self.p_offset = float(p_offset)
+        self.p_superfamily = float(p_superfamily)
+        weights = (self.p_kmer, self.p_offset, self.p_superfamily)
+        if any(w < 0 for w in weights) or sum(weights) > 1:
+            raise ValueError(
+                f"p_kmer + p_offset + p_superfamily must lie in [0, 1], got {weights}"
+            )
+        self.max_self_offset = (
+            self.segment_length if max_self_offset is None else int(max_self_offset)
+        )
         self.seed = int(seed)
         self.deterministic = bool(deterministic)
         self.log_every = int(log_every)
         self._epoch = 0
 
-        blob, starts, n_grid, last_offset, window_counts = _build_segment_index(
-            fasta_file, self.segment_length, self.window_step, _load_exclude(exclude_ids_file)
+        group_of = None
+        if superfamily_file is not None and self.p_superfamily > 0:
+            domains = load_superfamilies(superfamily_file)
+            group_of = lambda h: domains.get(parse_cath_domain_id(h), -1)  # noqa: E731
+
+        blob, starts, n_grid, last_offset, window_counts, seq_group = _build_segment_index(
+            fasta_file, self.segment_length, self.window_step,
+            _load_exclude(exclude_ids_file), group_of,
         )
         self._blob = blob
         self._starts = starts
-        self._n_grid = n_grid
-        self._last_offset = last_offset
-        self._window_cum = np.cumsum(window_counts)
-        self._total_windows = int(self._window_cum[-1])
+        self._seq_length = np.diff(np.append(starts, len(blob)))
+
+        # Flattening every window's blob offset once turns drawing into a single
+        # array lookup, and gives the minimizer index a stable window id space.
+        window_cum = np.cumsum(window_counts)
+        self._total_windows = int(window_cum[-1])
+        self._window_seq = np.repeat(np.arange(len(starts)), window_counts)
+        first_of_seq = window_cum - window_counts
+        rank_in_seq = np.arange(self._total_windows) - first_of_seq[self._window_seq]
+        offsets = np.where(
+            rank_in_seq < n_grid[self._window_seq],
+            rank_in_seq * self.window_step,
+            last_offset[self._window_seq],
+        )
+        self._window_start = starts[self._window_seq] + offsets
+        self._first_window = first_of_seq
+        self._window_counts = window_counts
+        self._build_superfamily_groups(seq_group)
+
+        self.kmer_index = kmer_index
+        if self.kmer_index is None and self.p_kmer > 0:
+            self.kmer_index = MinimizerIndex(
+                blob, self._window_start, self.segment_length,
+                k=kmer_size, w=minimizer_window, reduced=reduced_alphabet,
+            )
+        if self.kmer_index is None:
+            self.p_kmer = 0.0
 
     # ------------------------------------------------------------------
     # Sharding and seeding
@@ -329,19 +406,110 @@ class SequenceAlignmentIterableDataset(IterableDataset):
     # Sampling
     # ------------------------------------------------------------------
 
+    def _build_superfamily_groups(self, seq_group: np.ndarray) -> None:
+        """Group sequences by superfamily, keeping only families with >=2 members.
+
+        Stored CSR-style (members sorted by family, plus per-family offsets) so a
+        proposal is two array lookups rather than a dict of lists.
+        """
+        self._sf_members = self._sf_first = self._sf_count = None
+        if self.p_superfamily <= 0:
+            return
+        order = np.argsort(seq_group, kind='stable')
+        _, first, counts = np.unique(seq_group[order], return_index=True, return_counts=True)
+        keep = (counts >= 2) & (seq_group[order][first] >= 0)
+        if not keep.any():
+            logger.warning("No superfamily has two members; disabling p_superfamily")
+            self.p_superfamily = 0.0
+            return
+        self._sf_members = order
+        self._sf_first = first[keep]
+        self._sf_count = counts[keep]
+        logger.info(
+            f"Superfamily proposals: {len(self._sf_first):,} families with >=2 members "
+            f"covering {int(self._sf_count.sum()):,} sequences"
+        )
+
+    def _superfamily_pair(self, rng: np.random.Generator):
+        """Two windows from different domains of one CATH superfamily.
+
+        Families are drawn uniformly rather than in proportion to their size.
+        CATH is extremely skewed — the largest superfamily holds 49,516 domains
+        against a median of 7 — so size-weighted draws would spend almost all
+        their budget on a handful of folds, and an embedding used for search has
+        to generalise across folds, not memorise the popular ones.
+        """
+        if self._sf_first is None:
+            return None
+        family = int(rng.integers(0, len(self._sf_first)))
+        lo = int(self._sf_first[family])
+        count = int(self._sf_count[family])
+        a, b = rng.choice(count, size=2, replace=False)
+        seq_a = int(self._sf_members[lo + int(a)])
+        seq_b = int(self._sf_members[lo + int(b)])
+        return (
+            self._segment_at(int(self._first_window[seq_a])
+                             + int(rng.integers(0, self._window_counts[seq_a]))),
+            self._segment_at(int(self._first_window[seq_b])
+                             + int(rng.integers(0, self._window_counts[seq_b]))),
+        )
+
+    def _segment_at(self, window_id: int) -> str:
+        """The residues of one window, by window id."""
+        start = int(self._window_start[window_id])
+        return self._blob[start:start + self.segment_length]
+
     def _draw_segment(self, rng: np.random.Generator) -> str:
         """Draw one window uniformly at random from all windows in the corpus."""
-        r = int(rng.integers(0, self._total_windows))
-        idx = int(np.searchsorted(self._window_cum, r, side='right'))
-        window = r - (int(self._window_cum[idx - 1]) if idx > 0 else 0)
-        # Windows past the stride grid are the trailing, C-terminus-anchored one.
-        offset = (
-            window * self.window_step
-            if window < self._n_grid[idx]
-            else int(self._last_offset[idx])
-        )
-        start = int(self._starts[idx]) + offset
-        return self._blob[start:start + self.segment_length]
+        return self._segment_at(int(rng.integers(0, self._total_windows)))
+
+    def _offset_pair(self, rng: np.random.Generator):
+        """Two windows of one sequence, separated by a uniformly drawn offset.
+
+        Offset ``d`` maps directly onto overlap ``(L - d) / L``, so this sweeps
+        the whole score range with guaranteed coverage at every level — the one
+        source of mid-range examples that needs no search at all.  Starts are
+        not constrained to the stride grid here; the point is score control.
+        """
+        seq = int(self._window_seq[int(rng.integers(0, self._total_windows))])
+        span = int(self._seq_length[seq]) - self.segment_length
+        if span < 1:
+            return None
+        d = int(rng.integers(0, min(self.max_self_offset, span) + 1))
+        s1 = int(rng.integers(0, span - d + 1))
+        base = int(self._starts[seq])
+        L = self.segment_length
+        return self._blob[base + s1:base + s1 + L], self._blob[base + s1 + d:base + s1 + d + L]
+
+    def _kmer_pair(self, rng: np.random.Generator):
+        """A window plus another sharing a minimizer with it."""
+        wid = int(rng.integers(0, self._total_windows))
+        segment = self._segment_at(wid)
+        partner = self.kmer_index.partner(segment, rng, exclude=wid)
+        if partner < 0:
+            return None
+        return segment, self._segment_at(partner)
+
+    def _draw_pair(self, rng: np.random.Generator):
+        """Propose one candidate pair from the configured mixture of strategies.
+
+        Only the *proposal* distribution changes here — every pair is still
+        labelled by the same alignment, so no ground truth is invented.  Any
+        strategy that cannot produce a pair falls back to uniform rather than
+        retrying, which keeps the mixture weights honest.
+        """
+        u = rng.random()
+        if u < self.p_offset:
+            pair = self._offset_pair(rng)
+        elif u < self.p_offset + self.p_kmer:
+            pair = self._kmer_pair(rng)
+        elif u < self.p_offset + self.p_kmer + self.p_superfamily:
+            pair = self._superfamily_pair(rng)
+        else:
+            pair = None
+        if pair is not None:
+            return pair
+        return self._draw_segment(rng), self._draw_segment(rng)
 
     def _bin_of(self, score: float) -> int:
         return min(max(int(score * self.n_intervals), 0), self.n_intervals - 1)
@@ -365,8 +533,7 @@ class SequenceAlignmentIterableDataset(IterableDataset):
 
         for emitted in range(1, n_samples + 1):
             for _ in range(self.max_attempts):
-                seg_i = self._draw_segment(rng)
-                seg_j = self._draw_segment(rng)
+                seg_i, seg_j = self._draw_pair(rng)
                 raw = self.aligner.score(seg_i, seg_j, self.segment_length)
                 score = raw if self.score_method is None else self.score_method(raw)
                 k = self._bin_of(score)
