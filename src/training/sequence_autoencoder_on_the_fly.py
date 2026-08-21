@@ -42,6 +42,17 @@ def main(cfg: TrainingConfig):
     segment_length = meta.get('segment_length', 50)
     window_step = meta.get('window_step', None)
 
+    # Holdout split: whole CATH superfamilies kept out of training and used as
+    # the entire validation corpus, so the validation score measures transfer to
+    # folds the model has never seen rather than to fresh pairs of seen domains.
+    holdout = meta.get('holdout_domains_file', None)
+    excluded = meta.get('exclude_domains_file', None)
+    train_exclude = [f for f in (excluded, holdout) if f] or None
+    logger.info(
+        f"Validating on held-out superfamilies from {holdout}" if holdout
+        else "No holdout file: validation draws from the same domains as training"
+    )
+
     # Uniform pairing cannot reach related sequences: on CATH fewer than 0.02%
     # of random window pairs align appreciably, so the balancer ends up filling
     # its top bins with chance alignments.  p_kmer proposes pairs through a
@@ -57,7 +68,7 @@ def main(cfg: TrainingConfig):
         n_intervals=cfg.training_set.tm_score_intervals,
         balance_alpha=meta.get('balance_alpha', 1.0),
         max_attempts=meta.get('max_attempts', 50),
-        exclude_ids_file=meta.get('exclude_domains_file', None),
+        exclude_ids_file=train_exclude,
         p_kmer=meta.get('p_kmer', 0.0),
         p_offset=meta.get('p_offset', 0.0),
         max_self_offset=meta.get('max_self_offset', None),
@@ -82,15 +93,20 @@ def main(cfg: TrainingConfig):
         n_intervals=cfg.training_set.tm_score_intervals,
         balance_alpha=meta.get('balance_alpha', 1.0),
         max_attempts=meta.get('max_attempts', 50),
-        exclude_ids_file=meta.get('exclude_domains_file', None),
+        exclude_ids_file=excluded,
+        include_ids_file=holdout,
         p_kmer=meta.get('p_kmer', 0.0),
         p_offset=meta.get('p_offset', 0.0),
         max_self_offset=meta.get('max_self_offset', None),
         p_superfamily=meta.get('p_superfamily', 0.0),
         superfamily_file=meta.get('superfamily_file', None),
-        # Same corpus and windowing, so window ids agree and the index -- the
-        # expensive part of startup -- is built once rather than twice.
-        kmer_index=training_set.kmer_index,
+        kmer_size=meta.get('kmer_size', 6),
+        minimizer_window=meta.get('minimizer_window', 10),
+        reduced_alphabet=meta.get('reduced_alphabet', True),
+        # Window ids index the corpus the index was built from, so it can only be
+        # shared when both splits see the same domains.  With a holdout the
+        # validation set builds its own -- far smaller, and quick.
+        kmer_index=None if holdout else training_set.kmer_index,
         seed=cfg.global_seed + 1,
         deterministic=True,
     )

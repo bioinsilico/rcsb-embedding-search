@@ -17,7 +17,7 @@ import torch
 import torch.distributed as dist
 from torch.utils.data import DataLoader, IterableDataset, get_worker_info
 
-from dataset.sequence_identity_dataset import _load_exclude, collate_sequence_pairs
+from dataset.sequence_identity_dataset import collate_sequence_pairs
 from dataset.utils.alignment_scorer import AlignmentFractionScorer
 from dataset.utils.cath_superfamily import load_superfamilies, parse_cath_domain_id
 from dataset.utils.minimizer_index import MinimizerIndex
@@ -34,6 +34,29 @@ _NON_RESIDUE = re.compile(f'[^{_RESIDUE_ALPHABET}]')
 # More local ranks per node than any real machine has, so that
 # node_rank * span + local_rank stays collision-free across nodes.
 _LOCAL_RANK_SPAN = 4096
+
+
+def _load_ids(paths) -> set[str]:
+    """Read one id per line from a path, or from several paths.
+
+    Ids may be given either as full FASTA headers or as bare CATH domain ids
+    (``101mA00``); :func:`_build_segment_index` accepts both forms, so a holdout
+    list stays readable and does not have to mirror the header format.
+    """
+    if paths is None:
+        return set()
+    if isinstance(paths, str):
+        paths = [paths]
+    ids: set[str] = set()
+    for path in paths:
+        if not path:
+            continue
+        with open(path) as handle:
+            # Only the first whitespace-separated token, matching how FASTA
+            # headers are parsed below -- otherwise a file listing full
+            # description lines matches nothing and filters silently no-op.
+            ids |= {line.split()[0] for line in handle if line.strip()}
+    return ids
 
 
 def _rank_identity() -> int:
@@ -89,6 +112,7 @@ def _build_segment_index(
     segment_length: int,
     window_step: int,
     exclude: set[str],
+    include: set[str] | None = None,
     group_of=None,
 ) -> tuple[str, np.ndarray, np.ndarray, np.ndarray]:
     """Stream a FASTA file into a flat residue blob plus per-sequence offsets.
@@ -124,9 +148,15 @@ def _build_segment_index(
         if header is None:
             return
         n_records += 1
-        if header in exclude:
-            n_excluded += 1
-            return
+        if exclude or include:
+            # Accept either the raw header or the bare CATH domain id.
+            domain = parse_cath_domain_id(header)
+            if header in exclude or domain in exclude:
+                n_excluded += 1
+                return
+            if include and header not in include and domain not in include:
+                n_excluded += 1
+                return
         raw = ''.join(parts).upper()
         if len(raw) < segment_length:
             n_short += 1
@@ -153,9 +183,21 @@ def _build_segment_index(
                 parts.append(line)
         add(header, parts)
 
+    # A filter that matches nothing is nearly always a format mismatch between
+    # the id file and the FASTA headers, and it fails in the worst way: training
+    # silently keeps the domains meant to be held out.  Catch it at startup.
+    if exclude and n_excluded == 0:
+        logger.warning(
+            f"exclude list has {len(exclude):,} ids but matched no header in {fasta_file} "
+            f"-- nothing was excluded; check the id format"
+        )
     if not lengths:
+        detail = (
+            f" (include list of {len(include):,} ids matched no header -- check the id format)"
+            if include else ""
+        )
         raise ValueError(
-            f"No sequence in {fasta_file} is at least {segment_length} residues long"
+            f"No sequence in {fasta_file} is at least {segment_length} residues long{detail}"
         )
 
     lengths_arr = np.asarray(lengths, dtype=np.int64)
@@ -229,7 +271,11 @@ class SequenceAlignmentIterableDataset(IterableDataset):
         n_intervals: number of balancing bins over [0, 1].
         balance_alpha: balancing strength, ``0`` disables it.
         max_attempts: alignment budget per emitted sample.
-        exclude_ids_file: optional file of FASTA headers to skip, one per line.
+        exclude_ids_file: file (or list of files) of ids to drop, one per line;
+            full FASTA headers and bare CATH domain ids are both accepted.
+        include_ids_file: if given, keep *only* these ids.  Pointing a
+            validation dataset at the same file the training dataset excludes
+            gives a clean holdout split.
         p_kmer: probability of proposing a pair via the minimizer index, which
             is what makes genuinely related pairs reachable — uniform draws hit
             an appreciable alignment in under 0.02% of cases on CATH.
@@ -270,7 +316,8 @@ class SequenceAlignmentIterableDataset(IterableDataset):
         n_intervals: int = 5,
         balance_alpha: float = 1.0,
         max_attempts: int = 50,
-        exclude_ids_file: str | None = None,
+        exclude_ids_file=None,
+        include_ids_file=None,
         p_kmer: float = 0.0,
         p_offset: float = 0.0,
         p_superfamily: float = 0.0,
@@ -323,7 +370,7 @@ class SequenceAlignmentIterableDataset(IterableDataset):
 
         blob, starts, n_grid, last_offset, window_counts, seq_group = _build_segment_index(
             fasta_file, self.segment_length, self.window_step,
-            _load_exclude(exclude_ids_file), group_of,
+            _load_ids(exclude_ids_file), _load_ids(include_ids_file), group_of,
         )
         self._blob = blob
         self._starts = starts
@@ -347,6 +394,13 @@ class SequenceAlignmentIterableDataset(IterableDataset):
         self._build_superfamily_groups(seq_group)
 
         self.kmer_index = kmer_index
+        if self.kmer_index is not None and self.kmer_index.n_windows != self._total_windows:
+            raise ValueError(
+                f"kmer_index was built for {self.kmer_index.n_windows:,} windows but this "
+                f"corpus has {self._total_windows:,}. Sharing an index across different "
+                f"corpora (e.g. a train/validation holdout split) would return segments "
+                f"from unrelated windows -- build a separate index instead."
+            )
         if self.kmer_index is None and self.p_kmer > 0:
             self.kmer_index = MinimizerIndex(
                 blob, self._window_start, self.segment_length,

@@ -83,6 +83,10 @@ class MinimizerIndex:
             )
         self.k = int(k)
         self.w = int(w)
+        # Window ids are positions in the corpus this index was built from;
+        # reusing it against a different corpus would silently return segments
+        # from unrelated windows, so callers must be able to check.
+        self.n_windows = int(len(window_start))
         self.reduced = bool(reduced)
         self.segment_length = int(segment_length)
         self._alphabet = _ALPHABET_SIZE if reduced else 26
