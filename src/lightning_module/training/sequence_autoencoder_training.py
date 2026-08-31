@@ -1,3 +1,4 @@
+import logging
 import pathlib
 import lightning as L
 import torch
@@ -110,6 +111,22 @@ class LitSequenceAutoencoderTraining(L.LightningModule):
         self.similarity_weight = similarity_weight
         self.cfg = cfg
 
+        if reconstruction_weight == 0:
+            # DDP raises on parameters that never receive a gradient, so the
+            # unused decoder has to be frozen rather than merely skipped.
+            # Freezing also keeps it out of the all-reduce, which is where the
+            # saving actually lands on a 32-rank job.
+            frozen = 0
+            for name, module in nn_model.named_children():
+                if name in ('from_latent', 'decoder_queries', 'decoder', 'output_proj'):
+                    for parameter in module.parameters():
+                        parameter.requires_grad_(False)
+                        frozen += parameter.numel()
+            logging.getLogger(__name__).info(
+                f"reconstruction_weight=0: decoder skipped and frozen "
+                f"({frozen:,} parameters excluded from training)"
+            )
+
         self.z = None
         self.z_pred = None
 
@@ -151,17 +168,28 @@ class LitSequenceAutoencoderTraining(L.LightningModule):
     def _step(self, batch):
         tokens_i, tokens_j, score = batch
 
-        logits_i, latent_i = self.model(tokens_i)
-        logits_j, latent_j = self.model(tokens_j)
+        if self.reconstruction_weight > 0:
+            logits_i, latent_i = self.model(tokens_i)
+            logits_j, latent_j = self.model(tokens_j)
 
-        # Reconstruction loss (cross-entropy, ignoring padding)
-        recon_loss_i = nn.functional.cross_entropy(
-            logits_i.transpose(1, 2), tokens_i, ignore_index=AA_PAD_IDX,
-        )
-        recon_loss_j = nn.functional.cross_entropy(
-            logits_j.transpose(1, 2), tokens_j, ignore_index=AA_PAD_IDX,
-        )
-        recon_loss = (recon_loss_i + recon_loss_j) / 2.0
+            # Reconstruction loss (cross-entropy, ignoring padding)
+            recon_loss_i = nn.functional.cross_entropy(
+                logits_i.transpose(1, 2), tokens_i, ignore_index=AA_PAD_IDX,
+            )
+            recon_loss_j = nn.functional.cross_entropy(
+                logits_j.transpose(1, 2), tokens_j, ignore_index=AA_PAD_IDX,
+            )
+            recon_loss = (recon_loss_i + recon_loss_j) / 2.0
+        else:
+            # At weight 0 the decoder receives no gradient anyway, and it is
+            # over half the step time -- so skip it outright rather than
+            # computing a term that is multiplied away.  Its parameters then get
+            # no grad at all, so AdamW leaves them alone (weight decay included)
+            # and they simply stay at their initial values.
+            logits_i = logits_j = None
+            latent_i = self.model.encode(tokens_i)
+            latent_j = self.model.encode(tokens_j)
+            recon_loss = torch.zeros((), device=tokens_i.device)
 
         # Similarity alignment loss
         cos_sim = nn.functional.cosine_similarity(latent_i, latent_j)
@@ -172,11 +200,14 @@ class LitSequenceAutoencoderTraining(L.LightningModule):
         with torch.no_grad():
             stats = {
                 # Cross-entropy in nats says little about whether the decoder
-                # actually recovers residues; this does.
+                # actually recovers residues; this does.  Logged unconditionally
+                # even when the decoder is skipped: a metric that some ranks log
+                # and others do not desynchronises the sync_dist reduction.
                 'recon_acc': (
-                    _token_accuracy(logits_i, tokens_i)
-                    + _token_accuracy(logits_j, tokens_j)
-                ) / 2.0,
+                    torch.zeros((), device=tokens_i.device) if logits_i is None else
+                    (_token_accuracy(logits_i, tokens_i)
+                     + _token_accuracy(logits_j, tokens_j)) / 2.0
+                ),
                 # Mean similarity between unrelated members of the batch.  Rises
                 # towards 1 if the encoder collapses every sequence onto one
                 # point — a failure the paired cosine alone can hide.

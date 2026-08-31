@@ -52,3 +52,23 @@ def load_superfamilies(path: str) -> dict[str, int]:
         f"from {path}"
     )
     return domains
+
+
+def load_cath_levels(path: str) -> dict[str, tuple]:
+    """Map each domain to its full ``(C, A, T, H)`` classification.
+
+    The four levels give progressively harder negatives.  Two domains sharing
+    C.A.T but not H have the same fold and differ only in homology, so telling
+    them apart cannot be done on amino-acid composition alone — which an
+    untrained network already does well enough to reach 0.94 AUROC against
+    random negatives.
+    """
+    levels: dict[str, tuple] = {}
+    with open(path) as handle:
+        for line in handle:
+            if line.startswith('#'):
+                continue
+            f = line.split()
+            if len(f) >= 5:
+                levels[f[0]] = (f[1], f[2], f[3], f[4])
+    return levels
