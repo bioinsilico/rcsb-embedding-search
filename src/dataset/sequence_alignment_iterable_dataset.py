@@ -114,6 +114,7 @@ def _build_segment_index(
     exclude: set[str],
     include: set[str] | None = None,
     group_of=None,
+    max_length: int | None = None,
 ) -> tuple[str, np.ndarray, np.ndarray, np.ndarray]:
     """Stream a FASTA file into a flat residue blob plus per-sequence offsets.
 
@@ -141,10 +142,10 @@ def _build_segment_index(
     chunks: list[str] = []
     lengths: list[int] = []
     groups: list[int] = []
-    n_records = n_short = n_excluded = n_normalized = 0
+    n_records = n_short = n_excluded = n_normalized = n_long = 0
 
     def add(header: str | None, parts: list[str]) -> None:
-        nonlocal n_records, n_short, n_excluded, n_normalized
+        nonlocal n_records, n_short, n_excluded, n_normalized, n_long
         if header is None:
             return
         n_records += 1
@@ -160,6 +161,11 @@ def _build_segment_index(
         raw = ''.join(parts).upper()
         if len(raw) < segment_length:
             n_short += 1
+            return
+        # Attention and alignment are both quadratic in length, so a handful of
+        # very long records would dominate cost and padding alike.
+        if max_length is not None and len(raw) > max_length:
+            n_long += 1
             return
         seq = _NON_RESIDUE.sub('X', raw)
         if seq != raw:
@@ -214,6 +220,7 @@ def _build_segment_index(
         f"({int(window_counts.sum()):,} windows of length {segment_length} "
         f"at step {window_step}, {int(has_trailing.sum())} of them trailing); "
         f"read {n_records}, dropped {n_short} shorter than {segment_length}, "
+        f"dropped {n_long} longer than {max_length}, "
         f"excluded {n_excluded}, normalized non-standard residues in {n_normalized}"
     )
     return (''.join(chunks), starts, n_grid, last_offset, window_counts,
@@ -257,6 +264,15 @@ class SequenceAlignmentIterableDataset(IterableDataset):
         aligner: object exposing ``score(seq_i, seq_j, denominator) -> float``.
             Defaults to :class:`AlignmentFractionScorer` (local, BLOSUM62).
         segment_length: constant residue length of every emitted segment.
+        full_sequence: emit whole sequences instead of fixed-length windows.
+            Windows are still built and indexed -- they remain the right unit
+            for *proposing* pairs -- but each sample is a complete sequence and
+            the coverage denominator becomes ``min(len_i, len_j)``.
+        max_sequence_length: drop sequences longer than this.  Both attention
+            and alignment are quadratic in length, so a long tail dominates cost.
+        length_bucket: emit in length-sorted blocks of this many samples so that
+            batches group similar lengths; ``0`` disables it.  Only useful with
+            ``full_sequence``.
         window_step: stride between consecutive window starts.  ``None`` uses
             ``segment_length``, i.e. non-overlapping windows; a smaller value
             makes them overlap.  A sequence whose length is not an exact fit
@@ -311,6 +327,9 @@ class SequenceAlignmentIterableDataset(IterableDataset):
         aligner=None,
         segment_length: int = 50,
         window_step: int | None = None,
+        full_sequence: bool = False,
+        max_sequence_length: int | None = None,
+        length_bucket: int = 0,
         samples_per_epoch: int = 100_000,
         score_method=None,
         n_intervals: int = 5,
@@ -341,6 +360,12 @@ class SequenceAlignmentIterableDataset(IterableDataset):
 
         self.segment_length = int(segment_length)
         self.window_step = self.segment_length if window_step is None else int(window_step)
+        # In full-sequence mode the windows are still built and indexed -- they
+        # remain the right granularity for *proposing* pairs, since a seed match
+        # is local -- but what gets emitted is the whole parent sequence.
+        self.full_sequence = bool(full_sequence)
+        self.max_sequence_length = None if max_sequence_length is None else int(max_sequence_length)
+        self.length_bucket = int(length_bucket)
         self.aligner = AlignmentFractionScorer() if aligner is None else aligner
         self.samples_per_epoch = int(samples_per_epoch)
         self.score_method = score_method
@@ -371,6 +396,7 @@ class SequenceAlignmentIterableDataset(IterableDataset):
         blob, starts, n_grid, last_offset, window_counts, seq_group = _build_segment_index(
             fasta_file, self.segment_length, self.window_step,
             _load_ids(exclude_ids_file), _load_ids(include_ids_file), group_of,
+            self.max_sequence_length,
         )
         self._blob = blob
         self._starts = starts
@@ -495,18 +521,56 @@ class SequenceAlignmentIterableDataset(IterableDataset):
         """
         if self._sf_first is None:
             return None
-        family = int(rng.integers(0, len(self._sf_first)))
-        lo = int(self._sf_first[family])
-        count = int(self._sf_count[family])
-        a, b = rng.choice(count, size=2, replace=False)
-        seq_a = int(self._sf_members[lo + int(a)])
-        seq_b = int(self._sf_members[lo + int(b)])
+        pair = self._superfamily_sequences(rng)
+        if pair is None:
+            return None
+        seq_a, seq_b = pair
         return (
             self._segment_at(int(self._first_window[seq_a])
                              + int(rng.integers(0, self._window_counts[seq_a]))),
             self._segment_at(int(self._first_window[seq_b])
                              + int(rng.integers(0, self._window_counts[seq_b]))),
         )
+
+    def _superfamily_sequences(self, rng: np.random.Generator):
+        """Two distinct sequence indices from one uniformly drawn superfamily."""
+        if self._sf_first is None:
+            return None
+        family = int(rng.integers(0, len(self._sf_first)))
+        lo = int(self._sf_first[family])
+        count = int(self._sf_count[family])
+        a, b = rng.choice(count, size=2, replace=False)
+        return int(self._sf_members[lo + int(a)]), int(self._sf_members[lo + int(b)])
+
+    def _sequence_at(self, seq_id: int) -> str:
+        """A whole sequence, for full-sequence mode."""
+        start = int(self._starts[seq_id])
+        return self._blob[start:start + int(self._seq_length[seq_id])]
+
+    def _draw_pair_full(self, rng: np.random.Generator):
+        """Propose a pair of whole sequences.
+
+        Proposals still go through the window index, because a seed match is
+        local and windows are the right granularity to find one; only the unit
+        that gets emitted changes.  ``p_offset`` has no meaning here -- two
+        windows of one sequence are the same sequence -- so its probability mass
+        falls through to uniform.
+        """
+        u = rng.random()
+        if u < self.p_kmer and self.kmer_index is not None:
+            wid = int(rng.integers(0, self._total_windows))
+            partner = self.kmer_index.partner(self._segment_at(wid), rng, exclude=wid)
+            if partner >= 0:
+                a, b = int(self._window_seq[wid]), int(self._window_seq[partner])
+                if a != b:
+                    return self._sequence_at(a), self._sequence_at(b)
+        elif u < self.p_kmer + self.p_superfamily:
+            pair = self._superfamily_sequences(rng)
+            if pair is not None:
+                return self._sequence_at(pair[0]), self._sequence_at(pair[1])
+        n = len(self._starts)
+        return (self._sequence_at(int(rng.integers(0, n))),
+                self._sequence_at(int(rng.integers(0, n))))
 
     def _segment_at(self, window_id: int) -> str:
         """The residues of one window, by window id."""
@@ -552,6 +616,8 @@ class SequenceAlignmentIterableDataset(IterableDataset):
         strategy that cannot produce a pair falls back to uniform rather than
         retrying, which keeps the mixture weights honest.
         """
+        if self.full_sequence:
+            return self._draw_pair_full(rng)
         u = rng.random()
         if u < self.p_offset:
             pair = self._offset_pair(rng)
@@ -577,18 +643,19 @@ class SequenceAlignmentIterableDataset(IterableDataset):
         """Samples this rank yields per epoch (across all of its workers)."""
         return max(1, self.samples_per_epoch // _world_size())
 
-    def __iter__(self):
-        n_samples, seed_sequence = self._shard()
-        self._epoch += 1
-        rng = np.random.default_rng(seed_sequence)
-
+    def _generate(self, n_samples: int, rng: np.random.Generator):
         counts = np.zeros(self.n_intervals, dtype=np.int64)
         attempts_total = 0
 
         for emitted in range(1, n_samples + 1):
             for _ in range(self.max_attempts):
                 seg_i, seg_j = self._draw_pair(rng)
-                raw = self.aligner.score(seg_i, seg_j, self.segment_length)
+                # Whole sequences differ in length, so the coverage denominator
+                # is the shorter of the two: "what fraction of the smaller
+                # sequence is aligned".
+                denominator = (min(len(seg_i), len(seg_j)) if self.full_sequence
+                               else self.segment_length)
+                raw = self.aligner.score(seg_i, seg_j, denominator)
                 score = raw if self.score_method is None else self.score_method(raw)
                 k = self._bin_of(score)
                 attempts_total += 1
@@ -608,6 +675,31 @@ class SequenceAlignmentIterableDataset(IterableDataset):
                 torch.tensor(tokenize_sequence(seg_j), dtype=torch.long),
                 torch.tensor(score, dtype=torch.float32),
             )
+
+    def __iter__(self):
+        n_samples, seed_sequence = self._shard()
+        self._epoch += 1
+        rng = np.random.default_rng(seed_sequence)
+        stream = self._generate(n_samples, rng)
+
+        if self.length_bucket <= 1:
+            yield from stream
+            return
+
+        # Variable-length batches pad to their longest member, so emitting in
+        # length order lets the collate function group similar lengths together.
+        # CATH runs from 9 to 1275 residues; unsorted batches would spend most
+        # of their compute on padding.
+        buffer: list = []
+        for item in stream:
+            buffer.append(item)
+            if len(buffer) >= self.length_bucket:
+                buffer.sort(key=lambda t: max(t[0].size(0), t[1].size(0)))
+                yield from buffer
+                buffer = []
+        if buffer:
+            buffer.sort(key=lambda t: max(t[0].size(0), t[1].size(0)))
+            yield from buffer
 
 
 if __name__ == '__main__':

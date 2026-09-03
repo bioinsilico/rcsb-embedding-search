@@ -41,6 +41,15 @@ def main(cfg: TrainingConfig):
     aligner = instantiate(meta.aligner) if 'aligner' in meta else None
     segment_length = meta.get('segment_length', 50)
     window_step = meta.get('window_step', None)
+    # In full-sequence mode `segment_length` keeps two jobs: it is the window
+    # size the minimizer index is built on (proposals stay local) and the
+    # minimum length a sequence must have to be kept at all.
+    full_sequence = meta.get('full_sequence', False)
+    sequence_kwargs = dict(
+        full_sequence=full_sequence,
+        max_sequence_length=meta.get('max_sequence_length', None),
+        length_bucket=meta.get('length_bucket', 0),
+    )
 
     # Holdout split: whole CATH superfamilies kept out of training and used as
     # the entire validation corpus, so the validation score measures transfer to
@@ -52,6 +61,13 @@ def main(cfg: TrainingConfig):
         f"Validating on held-out superfamilies from {holdout}" if holdout
         else "No holdout file: validation draws from the same domains as training"
     )
+    if full_sequence:
+        logger.info(
+            f"Full-sequence mode: whole sequences emitted, coverage taken over "
+            f"min(len_i, len_j); index windows of {segment_length} residues, "
+            f"max length {sequence_kwargs['max_sequence_length']}, "
+            f"length_bucket {sequence_kwargs['length_bucket']}"
+        )
 
     # Uniform pairing cannot reach related sequences: on CATH fewer than 0.02%
     # of random window pairs align appreciably, so the balancer ends up filling
@@ -74,6 +90,7 @@ def main(cfg: TrainingConfig):
         max_self_offset=meta.get('max_self_offset', None),
         p_superfamily=meta.get('p_superfamily', 0.0),
         superfamily_file=meta.get('superfamily_file', None),
+        **sequence_kwargs,
         kmer_size=meta.get('kmer_size', 6),
         minimizer_window=meta.get('minimizer_window', 10),
         reduced_alphabet=meta.get('reduced_alphabet', True),
@@ -100,6 +117,7 @@ def main(cfg: TrainingConfig):
         max_self_offset=meta.get('max_self_offset', None),
         p_superfamily=meta.get('p_superfamily', 0.0),
         superfamily_file=meta.get('superfamily_file', None),
+        **sequence_kwargs,
         kmer_size=meta.get('kmer_size', 6),
         minimizer_window=meta.get('minimizer_window', 10),
         reduced_alphabet=meta.get('reduced_alphabet', True),

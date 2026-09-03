@@ -54,16 +54,21 @@ class AlignmentFractionScorer:
         gap_extend: int | None = -1,
         local: bool = True,
         terminal_penalty: bool = False,
+        identity_weighted: bool = False,
     ):
         self.matrix_name = matrix
         self.gap_open = gap_open
         self.gap_extend = gap_extend
         self.local = local
         self.terminal_penalty = terminal_penalty
+        # Counting only identically-matched columns instead of all aligned ones.
+        # (coverage x identity-within-alignment collapses to matches/denominator.)
+        self.identity_weighted = identity_weighted
         self._matrix = None
         logger.info(
             f"Alignment scorer: matrix={matrix} gap_penalty={self.gap_penalty} "
-            f"local={local} terminal_penalty={terminal_penalty}"
+            f"local={local} terminal_penalty={terminal_penalty} "
+            f"identity_weighted={identity_weighted}"
         )
 
     @property
@@ -104,9 +109,10 @@ class AlignmentFractionScorer:
         """
         if denominator <= 0:
             return 0.0
+        a_seq = ProteinSequence(to_alignment_alphabet(seq_i))
+        b_seq = ProteinSequence(to_alignment_alphabet(seq_j))
         alignments = align.align_optimal(
-            ProteinSequence(to_alignment_alphabet(seq_i)),
-            ProteinSequence(to_alignment_alphabet(seq_j)),
+            a_seq, b_seq,
             self.matrix,
             gap_penalty=self.gap_penalty,
             terminal_penalty=self.terminal_penalty,
@@ -118,5 +124,8 @@ class AlignmentFractionScorer:
         trace = alignments[0].trace
         if len(trace) == 0:
             return 0.0
-        aligned = int(np.count_nonzero((trace[:, 0] != -1) & (trace[:, 1] != -1)))
-        return aligned / denominator
+        both = (trace[:, 0] != -1) & (trace[:, 1] != -1)
+        if not self.identity_weighted:
+            return int(np.count_nonzero(both)) / denominator
+        matched = sum(1 for p, q in trace[both] if a_seq[p] == b_seq[q])
+        return matched / denominator
