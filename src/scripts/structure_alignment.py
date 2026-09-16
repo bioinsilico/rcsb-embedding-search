@@ -1,0 +1,340 @@
+"""Building blocks for judging sequence-level alignments against structure.
+
+The question these tools answer: how close does a pairwise alignment computed from
+sequence-level information come to the alignment implied by a structural superposition?
+
+A structure contributes three parallel, index-aligned arrays (one entry per residue with a
+CA atom): the amino acid sequence, the Foldseek 3Di structural-alphabet string, and the CA
+coordinates. Alignments are then scored with a substitution matrix over the combined
+(amino acid, 3Di) alphabet, so a single dynamic-programming call can weight sequence and
+structure signal in any proportion.
+
+Two measures of alignment quality:
+
+* ``tm_score`` superimposes the two structures using only the residue pairs an alignment
+  proposes and returns the TM-score of that superposition. It needs no reference alignment
+  (the idea behind ``USalign -I``) and matches US-align to within 0.001 in our tests.
+* ``reference_alignment`` runs US-align to obtain a structural reference, and ``prf``
+  scores a candidate alignment against it as precision / recall / F1 over residue pairs.
+
+``degrade_3di`` simulates an imperfect 3Di predictor, so the benefit of a predicted (rather
+than exact) 3Di string can be estimated before training one.
+
+This module is imported by ``structure_alignment_benchmark.py``, which sits next to it.
+"""
+from __future__ import annotations
+
+import gzip
+import random
+import re
+import subprocess
+from dataclasses import dataclass, replace
+
+import numpy as np
+import biotite.structure as struc
+from biotite.sequence import Alphabet, GeneralSequence, ProteinSequence
+from biotite.sequence.align import SubstitutionMatrix, align_optimal
+from biotite.structure.alphabet import to_3di
+from biotite.structure.io.pdb import PDBFile
+from biotite.structure.io.pdbx import CIFFile, get_structure
+
+# Amino acids in BLOSUM62 order plus X; 3Di states as biotite emits them (lower case).
+AMINO_ACIDS = "ACDEFGHIKLMNPQRSTVWYX"
+THREE_DI = "acdefghiklmnpqrstvwy"
+PAIR_ALPHABET = Alphabet(list(range(len(AMINO_ACIDS) * len(THREE_DI))))
+
+# Foldseek's weighting of amino acid and 3Di substitution scores, and its gap penalties.
+FOLDSEEK_WEIGHTS = (1.4, 2.1)
+FOLDSEEK_GAPS = (-10, -1)
+
+#: Scoring schemes compared by the benchmark. ``weights`` is (amino acid, 3Di); ``None``
+#: means plain BLOSUM62 over the amino acid alphabet alone.
+SCHEMES = {
+    "blosum_sw": dict(weights=None, gaps=(-11, -1), local=True),
+    "blosum_semi": dict(weights=None, gaps=(-11, -1), local=False),
+    "3di_aa_sw": dict(weights=FOLDSEEK_WEIGHTS, gaps=FOLDSEEK_GAPS, local=True),
+    "3di_aa_semi": dict(weights=FOLDSEEK_WEIGHTS, gaps=FOLDSEEK_GAPS, local=False),
+    "3di_sw": dict(weights=(0.0, 2.1), gaps=FOLDSEEK_GAPS, local=True),
+}
+
+_MATRIX_CACHE: dict = {}
+
+
+class UnreadableStructure(Exception):
+    """A structure file that cannot be parsed into a single model."""
+
+
+@dataclass
+class Chain:
+    """One chain as three index-aligned arrays, one entry per residue with a CA atom."""
+
+    name: str
+    sequence: str          # amino acids, one letter per residue
+    three_di: str          # 3Di states, same length
+    ca_coord: np.ndarray   # (L, 3) CA coordinates, same order
+
+    def __len__(self) -> int:
+        return len(self.sequence)
+
+    @property
+    def invalid_3di_fraction(self) -> float:
+        """Share of residues Foldseek could not encode.
+
+        Foldseek writes these as 'd', which is also a valid state, so they cannot be told
+        apart from a genuine 'd' afterwards. Residues at segment ends, with missing
+        backbone atoms, or without a structural neighbour end up here.
+        """
+        return self.three_di.count("d") / max(1, len(self.three_di))
+
+    def pair_codes(self) -> np.ndarray:
+        """Encode residues as single symbols of the combined (amino acid, 3Di) alphabet."""
+        amino = np.array([
+            AMINO_ACIDS.index(c) if c in AMINO_ACIDS else AMINO_ACIDS.index("X")
+            for c in self.sequence
+        ])
+        structural = np.array([
+            THREE_DI.index(c) if c in THREE_DI else THREE_DI.index("d")
+            for c in self.three_di
+        ])
+        return amino * len(THREE_DI) + structural
+
+
+def load_chain(path: str, chain_id: str | None = None, name: str | None = None) -> Chain:
+    """Read one chain from a PDB or mmCIF file (optionally gzipped)."""
+    if path.endswith((".cif", ".cif.gz")):
+        opener = gzip.open if path.endswith(".gz") else open
+        with opener(path, "rt") as handle:
+            atoms = get_structure(CIFFile.read(handle), model=1)
+    else:
+        pdb_file = PDBFile.read(path)
+        try:
+            atoms = pdb_file.get_structure(model=1)
+        except ValueError as error:
+            raise UnreadableStructure(f"{path}: {error}") from None
+    atoms = atoms[struc.filter_amino_acids(atoms)]
+    if chain_id is not None:
+        atoms = atoms[atoms.chain_id == chain_id]
+    if atoms.array_length() == 0:
+        raise UnreadableStructure(f"{path}: no amino acid residues"
+                                  f"{'' if chain_id is None else f' in chain {chain_id}'}")
+    # One residue = one CA atom, so sequence, 3Di and coordinates stay index-aligned.
+    ca_atoms = atoms[atoms.atom_name == "CA"]
+    with_ca = set(zip(ca_atoms.chain_id, ca_atoms.res_id, ca_atoms.ins_code))
+    atoms = atoms[np.array([
+        (chain, res, ins) in with_ca
+        for chain, res, ins in zip(atoms.chain_id, atoms.res_id, atoms.ins_code)
+    ])]
+    three_di_sequences, _ = to_3di(atoms)
+    ca_atoms = atoms[atoms.atom_name == "CA"]
+    sequence = "".join(ProteinSequence.convert_letter_3to1(r) for r in ca_atoms.res_name)
+    three_di = "".join(str(s) for s in three_di_sequences)
+    if not len(sequence) == len(three_di) == ca_atoms.array_length():
+        raise UnreadableStructure(
+            f"{path}: sequence ({len(sequence)}), 3Di ({len(three_di)}) and "
+            f"CA ({ca_atoms.array_length()}) lengths disagree"
+        )
+    return Chain(name=name or path, sequence=sequence, three_di=three_di,
+                 ca_coord=ca_atoms.coord.astype(np.float64))
+
+
+def combined_matrix(weight_amino: float, weight_3di: float) -> SubstitutionMatrix:
+    """Substitution matrix over (amino acid, 3Di) symbols, Foldseek-style weighted sum."""
+    key = (weight_amino, weight_3di)
+    if key in _MATRIX_CACHE:
+        return _MATRIX_CACHE[key]
+    blosum = SubstitutionMatrix.std_protein_matrix()
+    blosum_alphabet = blosum.get_alphabet1()
+    amino_scores = blosum.score_matrix()[np.ix_(
+        [blosum_alphabet.encode(c) for c in AMINO_ACIDS],
+        [blosum_alphabet.encode(c) for c in AMINO_ACIDS],
+    )]
+    structural = SubstitutionMatrix.std_3di_matrix()
+    structural_alphabet = structural.get_alphabet1()
+    structural_scores = structural.score_matrix()[np.ix_(
+        [structural_alphabet.encode(c) for c in THREE_DI],
+        [structural_alphabet.encode(c) for c in THREE_DI],
+    )]
+    scores = (weight_amino * amino_scores[:, None, :, None]
+              + weight_3di * structural_scores[None, :, None, :])
+    scores = np.rint(scores).astype(np.int32).reshape(len(PAIR_ALPHABET), len(PAIR_ALPHABET))
+    _MATRIX_CACHE[key] = SubstitutionMatrix(PAIR_ALPHABET, PAIR_ALPHABET, scores)
+    return _MATRIX_CACHE[key]
+
+
+def align(query: Chain, target: Chain, scheme: dict) -> tuple[np.ndarray, int]:
+    """Align two chains under one scheme; returns the aligned residue pairs and the score."""
+    if scheme["weights"] is None:
+        matrix = SubstitutionMatrix.std_protein_matrix()
+        query_seq = ProteinSequence(query.sequence)
+        target_seq = ProteinSequence(target.sequence)
+    else:
+        matrix = combined_matrix(*scheme["weights"])
+        query_seq = GeneralSequence(PAIR_ALPHABET, list(query.pair_codes()))
+        target_seq = GeneralSequence(PAIR_ALPHABET, list(target.pair_codes()))
+    alignment = align_optimal(
+        query_seq, target_seq, matrix,
+        gap_penalty=scheme["gaps"], local=scheme["local"],
+        terminal_penalty=False, max_number=1,
+    )[0]
+    trace = alignment.trace
+    aligned = (trace[:, 0] != -1) & (trace[:, 1] != -1)
+    return trace[aligned], int(alignment.score)
+
+
+def tm_score(pairs: np.ndarray, query: Chain, target: Chain, length_norm: int) -> float:
+    """TM-score of the superposition implied by a fixed alignment (as ``USalign -I``).
+
+    Superimposes on seed fragments of the aligned pairs, then repeatedly re-superimposes on
+    the pairs falling inside a distance cutoff, keeping the best TM-score over all seeds.
+    """
+    if len(pairs) < 3:
+        return 0.0
+    query_ca = query.ca_coord[pairs[:, 0]]
+    target_ca = target.ca_coord[pairs[:, 1]]
+    d0 = max(0.5, 1.24 * (length_norm - 15) ** (1 / 3) - 1.8)
+    n_pairs = len(pairs)
+    best = 0.0
+    seeds = [n_pairs]
+    while seeds[-1] > 4:
+        seeds.append(max(4, seeds[-1] // 2))
+    for seed in seeds:
+        for start in range(0, n_pairs - seed + 1, max(1, seed // 2)):
+            selected = np.arange(start, start + seed)
+            for _ in range(20):
+                if len(selected) < 3:
+                    break
+                _, transform = struc.superimpose(target_ca[selected], query_ca[selected])
+                distances = np.linalg.norm(transform.apply(query_ca) - target_ca, axis=1)
+                best = max(best, float(np.sum(1 / (1 + (distances / d0) ** 2)) / length_norm))
+                cutoff = d0 + 1.0
+                nearby = np.flatnonzero(distances < cutoff)
+                while len(nearby) < 3 and cutoff < 20:
+                    cutoff += 0.5
+                    nearby = np.flatnonzero(distances < cutoff)
+                if np.array_equal(nearby, selected):
+                    break
+                selected = nearby
+    return best
+
+
+def sequence_identity(pairs: np.ndarray, query: Chain, target: Chain) -> float:
+    """Identical residues over aligned pairs."""
+    if len(pairs) == 0:
+        return 0.0
+    return sum(query.sequence[i] == target.sequence[j] for i, j in pairs) / len(pairs)
+
+
+def global_identity(query: Chain, target: Chain) -> float:
+    """Identical residues over the shorter chain, from a semi-global BLOSUM62 alignment.
+
+    Used to stratify results: identity measured over a local alignment's own region is
+    biased upwards, because a local alignment keeps only the best-matching core.
+    """
+    pairs, _ = align(query, target, SCHEMES["blosum_semi"])
+    matches = sum(query.sequence[i] == target.sequence[j] for i, j in pairs)
+    return matches / max(1, min(len(query), len(target)))
+
+
+def reference_alignment(usalign: str, path_query: str, path_target: str) -> dict | None:
+    """Structural reference alignment from US-align.
+
+    Returns the aligned residue pairs, the TM-scores keyed by normalization length, and the
+    two ungapped sequences (so the caller can confirm US-align used the same residues).
+    """
+    result = subprocess.run([usalign, path_query, path_target],
+                            capture_output=True, text=True)
+    lines = result.stdout.splitlines()
+    tm_by_length = {}
+    for line in lines:
+        if line.startswith("TM-score="):
+            match = re.search(r"L=(\d+)", line)
+            if match:
+                tm_by_length[int(match.group(1))] = float(line.split("=")[1].split()[0])
+    # The three alignment lines follow the '(":" denotes ...)' legend. The middle line can
+    # start with spaces, so take them by position rather than by filtering.
+    legend = next((i for i, line in enumerate(lines) if line.startswith('(":"')), None)
+    if legend is None or not tm_by_length:
+        return None
+    body = [line for line in lines[legend + 1:] if line.strip()]
+    if len(body) < 3:
+        return None
+    top, _, bottom = body[0], body[1], body[2]
+    pairs, i, j = [], 0, 0
+    for top_char, bottom_char in zip(top, bottom):
+        if top_char != "-" and bottom_char != "-":
+            pairs.append((i, j))
+        i += top_char != "-"
+        j += bottom_char != "-"
+    return dict(pairs=np.array(pairs), tm_by_length=tm_by_length,
+                sequence_query=top.replace("-", ""), sequence_target=bottom.replace("-", ""))
+
+
+def reference_tm(reference: dict, length_norm: int) -> float:
+    """US-align's own TM-score, normalized by the shorter chain where available."""
+    return reference["tm_by_length"].get(length_norm, max(reference["tm_by_length"].values()))
+
+
+def prf(predicted: np.ndarray, reference: np.ndarray, tolerance: int = 0) -> tuple[float, float, float]:
+    """Precision, recall and F1 of predicted residue pairs against a reference alignment.
+
+    ``tolerance`` allows a pair to count as correct if the target residue is within that
+    many positions of the reference, which separates "aligned the wrong region" from
+    "aligned the right region, shifted by a residue or two".
+    """
+    if len(predicted) == 0 or len(reference) == 0:
+        return 0.0, 0.0, 0.0
+    if tolerance == 0:
+        reference_set = set(map(tuple, reference))
+        hits = sum(tuple(pair) in reference_set for pair in predicted)
+    else:
+        by_query: dict[int, list[int]] = {}
+        for i, j in reference:
+            by_query.setdefault(i, []).append(j)
+        hits = sum(any(abs(j - ref_j) <= tolerance for ref_j in by_query.get(i, []))
+                   for i, j in predicted)
+    precision, recall = hits / len(predicted), hits / len(reference)
+    f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
+    return precision, recall, f1
+
+
+def _confusion_table(mode: str) -> np.ndarray:
+    """Per-state distribution over the wrong 3Di states.
+
+    ``confusion`` draws wrong states in proportion to their 3Di substitution score, so
+    mistakes land on geometrically similar states, the way real predictors fail.
+    ``uniform`` spreads them evenly, a pessimistic floor.
+    """
+    scores = SubstitutionMatrix.std_3di_matrix().score_matrix().astype(float)
+    table = np.exp(scores) if mode == "confusion" else np.ones_like(scores)
+    np.fill_diagonal(table, 0.0)
+    return table / table.sum(axis=1, keepdims=True)
+
+
+def degrade_3di(chain: Chain, accuracy: float, mode: str, rng: random.Random) -> Chain:
+    """Replace a share of a chain's 3Di states, simulating an imperfect predictor."""
+    if accuracy >= 1.0:
+        return chain
+    table = _confusion_table(mode)
+    alphabet = "".join(SubstitutionMatrix.std_3di_matrix().get_alphabet1().get_symbols())
+    states = list(chain.three_di)
+    for position, state in enumerate(states):
+        if state not in alphabet or rng.random() < accuracy:
+            continue
+        weights = table[alphabet.index(state)]
+        states[position] = alphabet[rng.choices(range(len(alphabet)), weights=weights)[0]]
+    return replace(chain, three_di="".join(states))
+
+
+def write_ca_pdb(chain: Chain, path: str, chain_id: str = "A") -> None:
+    """Write a CA-only PDB file, so US-align sees exactly the residues in ``chain``."""
+    with open(path, "w") as handle:
+        for number, (residue, xyz) in enumerate(zip(chain.sequence, chain.ca_coord), start=1):
+            try:
+                name = ProteinSequence.convert_letter_1to3(residue)
+            except Exception:
+                name = "UNK"
+            handle.write(
+                f"ATOM  {number:5d}  CA  {name:>3s} {chain_id}{number:4d}    "
+                f"{xyz[0]:8.3f}{xyz[1]:8.3f}{xyz[2]:8.3f}  1.00  0.00           C\n"
+            )
+        handle.write("TER\nEND\n")
