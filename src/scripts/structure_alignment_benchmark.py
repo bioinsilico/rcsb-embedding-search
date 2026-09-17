@@ -44,6 +44,7 @@ import statistics as st
 import sys
 import tempfile
 import time
+from dataclasses import replace
 
 from structure_alignment import (
     SCHEMES,
@@ -188,6 +189,23 @@ def command_pair(args):
         print(line)
 
 
+def read_fasta(path):
+    """``{id: sequence}``; the id is the first token of the header."""
+    records, name, chunks = {}, None, []
+    with open(path) as handle:
+        for line in handle:
+            line = line.rstrip("\n")
+            if line.startswith(">"):
+                if name is not None:
+                    records[name] = "".join(chunks)
+                name, chunks = line[1:].split()[0], []
+            elif line:
+                chunks.append(line)
+    if name is not None:
+        records[name] = "".join(chunks)
+    return records
+
+
 def collect(args, need_reference):
     """Load, align and score sampled pairs; returns one record per usable pair."""
     rng = random.Random(args.seed)
@@ -195,6 +213,10 @@ def collect(args, need_reference):
                               args.line_rate)
     print(f"{len(candidates)} candidate pairs with TM >= {args.min_tm}", flush=True)
     cache, records, start = {}, [], time.time()
+    # Predicted query 3Di, if given: only pairs whose query has a prediction are kept,
+    # which is also how the evaluation stays inside the held-out split.
+    predicted = read_fasta(args.query_3di) if getattr(args, "query_3di", None) else None
+    skipped_length = 0
 
     def chain(identifier):
         if identifier not in cache:
@@ -211,10 +233,20 @@ def collect(args, need_reference):
         path_b = os.path.join(args.structures, identifier_b + args.suffix)
         if not (os.path.exists(path_a) and os.path.exists(path_b)):
             continue
+        if predicted is not None and identifier_a not in predicted:
+            continue
         try:
             query, target = chain(identifier_a), chain(identifier_b)
         except (UnreadableStructure, ValueError, KeyError):
             continue
+        if predicted is not None:
+            # The prediction is indexed by the label parser's residues, which keeps
+            # residues without a CA atom; load_chain keeps only CA-bearing ones. When the
+            # two disagree the strings cannot be aligned index for index, so skip the pair.
+            if len(predicted[identifier_a]) != len(query):
+                skipped_length += 1
+                continue
+            query = replace(query, three_di=predicted[identifier_a])
         if not (args.min_length <= len(query) <= args.max_length
                 and args.min_length <= len(target) <= args.max_length):
             continue
@@ -228,6 +260,9 @@ def collect(args, need_reference):
                             chains=(query, target), reference=reference))
         if len(records) % 50 == 0:
             print(f"  {len(records)} pairs in {time.time() - start:.0f}s", flush=True)
+    if predicted is not None:
+        print(f"predicted query 3Di from {args.query_3di}: {len(predicted):,} domains available, "
+              f"{skipped_length} pairs skipped on a length mismatch with the structure")
     return records
 
 
@@ -347,6 +382,9 @@ def main():
         sub.add_argument("--line-rate", type=float, default=1.0,
                          help="fraction of table lines read, for very large tables [1.0]")
         sub.add_argument("--seed", type=int, default=20260916)
+        sub.add_argument("--query-3di", default=None,
+                         help="FASTA of predicted query 3Di (predict_three_di.py); pairs whose "
+                              "query is absent from it are skipped")
         add_common(sub)
         sub.set_defaults(func=func)
 
