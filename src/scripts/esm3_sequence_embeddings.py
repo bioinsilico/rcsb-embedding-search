@@ -87,13 +87,21 @@ def _read_sequence(row: dict) -> tuple[dict, str | None, str | None]:
         return row, None, f"{type(error).__name__}: {error}"
 
 
-def make_batches(items: list[tuple[str, str]], max_tokens: int, max_batch: int) -> list[list[tuple[str, str]]]:
-    """Group (key, sequence) pairs, longest first, so padded tokens stay under ``max_tokens``."""
+def make_batches(items: list[tuple[str, str]], max_tokens: int, max_batch: int,
+                 max_pairs: int) -> list[list[tuple[str, str]]]:
+    """Group (key, sequence) pairs, longest first, under both batch limits.
+
+    ``max_tokens`` bounds padded tokens (B x L), which is what the feed-forward
+    layers cost.  ``max_pairs`` bounds B x L^2, which is what attention costs: a
+    fixed token budget still runs out of memory on long sequences.
+    """
     items = sorted(items, key=lambda kv: -len(kv[1]))
     batches, current = [], []
     for key, sequence in items:
         width = (len(current[0][1]) if current else len(sequence)) + 2
-        if current and ((len(current) + 1) * width > max_tokens or len(current) == max_batch):
+        if current and ((len(current) + 1) * width > max_tokens
+                        or (len(current) + 1) * width * width > max_pairs
+                        or len(current) == max_batch):
             batches.append(current)
             current = []
         current.append((key, sequence))
@@ -118,15 +126,37 @@ def assign_batches(batches: list, n_ranks: int) -> list[list]:
 # ---------------------------------------------------------------------------------------
 
 class SequenceOnlyESM3:
-    """Batched, sequence-only ESM3 forward pass returning embeddings and ss8 logits."""
+    """Batched, sequence-only ESM3 forward pass returning embeddings and ss8 logits.
 
-    def __init__(self, device: torch.device):
+    ``precision`` follows ESM3's own behaviour by default ("bf16"): ``ESM3.logits``
+    enables bfloat16 autocast whenever the device is CUDA, so every embedding this
+    repo has produced on a GPU is bf16-computed. "fp32" turns that off, which matches
+    FoldMatch's CPU deployment exactly at roughly an order of magnitude more precision
+    and a slower forward pass.
+    """
+
+    def __init__(self, device: torch.device, precision: str = "bf16"):
         from esm.models.esm3 import ESM3
         from esm.utils.constants.models import ESM3_OPEN_SMALL
 
         self.device = device
+        self.precision = precision
         self.model = ESM3.from_pretrained(ESM3_OPEN_SMALL, device=device).eval()
+        if precision == "fp32":
+            # from_pretrained casts weights to bfloat16 off CPU; undo that for a true fp32 pass.
+            self.model = self.model.to(torch.float32)
         self.tokenizers = self.model.tokenizers
+        # Geometric attention (block 0 only, 256 vector heads) contributes exactly zero
+        # without coordinates: the model is built with mask_and_zero_frameless=True, so an
+        # all-false frame mask zeroes its output, and its projection has no bias. Running it
+        # anyway costs a (B, 256, L, L, 3) tensor - 26 GB for a batch of 26 x 600 residues.
+        # ``reference()`` switches it back on, so --verify tests that skipping it is exact.
+        self._geom_blocks = [b for b in self.model.transformer.blocks if b.use_geom_attn]
+        self._set_geom_attn(False)
+
+    def _set_geom_attn(self, enabled: bool) -> None:
+        for block in self._geom_blocks:
+            block.use_geom_attn = enabled
 
     def _tracks(self, sequence: str):
         """Input tracks for one sequence, filled exactly as ``forward_and_sample`` fills them."""
@@ -157,7 +187,8 @@ class SequenceOnlyESM3:
 
         autocast = (
             torch.autocast(device_type="cuda", dtype=torch.bfloat16)
-            if self.device.type == "cuda" else torch.autocast(device_type="cpu", enabled=False)
+            if self.device.type == "cuda" and self.precision == "bf16"
+            else torch.autocast(device_type=self.device.type, enabled=False)
         )
         with autocast:
             output = self.model.forward(
@@ -187,7 +218,11 @@ class SequenceOnlyESM3:
         from esm.sdk.api import ESMProtein, SamplingConfig
 
         protein = self.model.encode(ESMProtein(sequence=sequence))
-        output = self.model.forward_and_sample(protein, SamplingConfig(return_per_residue_embeddings=True))
+        self._set_geom_attn(True)
+        try:
+            output = self.model.forward_and_sample(protein, SamplingConfig(return_per_residue_embeddings=True))
+        finally:
+            self._set_geom_attn(False)
         return output.per_residue_embedding.float().cpu()[1:-1]
 
 
@@ -211,13 +246,13 @@ def _verify(embedder: SequenceOnlyESM3, sequences: list[str]) -> list[dict]:
 # ---------------------------------------------------------------------------------------
 
 def _worker(rank: int, device_name: str, batches: list, part_dir: str, dtype: str,
-            verify: list[str], log_every: int) -> None:
+            verify: list[str], log_every: int, precision: str = "bf16") -> None:
     logging.basicConfig(level=logging.INFO, format=f"%(asctime)s [rank {rank}] %(message)s")
     torch.set_num_threads(max(1, int(os.environ.get("OMP_NUM_THREADS", "4"))))
     device = torch.device(device_name)
     if device.type == "cuda":
         torch.cuda.set_device(device)
-    embedder = SequenceOnlyESM3(device)
+    embedder = SequenceOnlyESM3(device, precision=precision)
     np_dtype = np.dtype(dtype)
 
     if verify:
@@ -249,8 +284,11 @@ def _worker(rank: int, device_name: str, batches: list, part_dir: str, dtype: st
                 n_tokens += len(sequence)
             if step % log_every == 0 or step == len(batches) - 1:
                 elapsed = time.time() - start
-                logger.info(f"batch {step + 1}/{len(batches)}: {n_done:,} sequences, "
-                            f"{n_tokens / max(elapsed, 1e-9):,.0f} residues/s, max |embedding| {max_abs:.1f}")
+                peak = (f", peak GPU {torch.cuda.max_memory_allocated(device) / 2**30:.1f} GiB"
+                        if device.type == "cuda" else "")
+                logger.info(f"batch {step + 1}/{len(batches)} (size {len(batch)} x {len(batch[0][1])}): "
+                            f"{n_done:,} sequences, {n_tokens / max(elapsed, 1e-9):,.0f} residues/s, "
+                            f"max |embedding| {max_abs:.1f}{peak}")
     for handle in files.values():
         handle.close()
     with open(os.path.join(part_dir, f"part-{rank}.done"), "w") as handle:
@@ -317,7 +355,8 @@ def provenance(args, devices: list[str]) -> dict:
         repo_dirty=bool(git("status", "--porcelain")),
         embedding="last transformer block output before the final LayerNorm, BOS/EOS removed",
         inputs="sequence only; structure, ss8, sasa, function and residue tracks masked as in forward_and_sample",
-        autocast="bfloat16" if any(d.startswith("cuda") for d in devices) else "none",
+        geometric_attention="skipped (exactly zero without coordinates); --verify compares against running it",
+        autocast=("bfloat16" if any(d.startswith("cuda") for d in devices) and args.precision == "bf16" else "none"),
         stored_dtype=args.dtype,
         manifest=os.path.abspath(args.manifest),
         splits=args.splits,
@@ -342,7 +381,12 @@ def main() -> None:
                              "(default: all GPUs)")
     parser.add_argument("--max-tokens", type=int, default=16000, help="padded tokens per batch")
     parser.add_argument("--max-batch", type=int, default=128)
-    parser.add_argument("--dtype", choices=["float16", "float32"], default="float16")
+    parser.add_argument("--max-pairs", type=int, default=40_000_000,
+                        help="padded tokens x width per batch, which is what attention memory scales with")
+    parser.add_argument("--dtype", choices=["float16", "float32"], default="float16",
+                        help="stored dtype (float16 costs 4.9e-4 relative error, well under bf16 compute error)")
+    parser.add_argument("--precision", choices=["bf16", "fp32"], default="bf16",
+                        help="GPU compute precision; bf16 is what ESM3 itself uses on CUDA (default)")
     parser.add_argument("--verify", type=int, default=0,
                         help="compare N sequences with the unbatched forward_and_sample path")
     parser.add_argument("--cpu-workers", type=int, default=16, help="processes reading PDB files")
@@ -391,20 +435,21 @@ def main() -> None:
                 f"(length median {int(np.median(lengths))}, max {lengths.max()})")
 
     # ---- embed --------------------------------------------------------------------------
-    batches = make_batches(list(unique.items()), args.max_tokens, args.max_batch)
+    batches = make_batches(list(unique.items()), args.max_tokens, args.max_batch, args.max_pairs)
     shards = assign_batches(batches, len(devices))
     verify = [s for _, s in random.Random(args.seed).sample(list(unique.items()), min(args.verify, len(unique)))]
     logger.info(f"{len(batches):,} batches over {len(devices)} device(s)")
 
     start = time.time()
     if len(devices) == 1:
-        _worker(0, devices[0], shards[0], part_dir, args.dtype, verify, args.log_every)
+        _worker(0, devices[0], shards[0], part_dir, args.dtype, verify, args.log_every, args.precision)
     else:
         context = mp.get_context("spawn")
         processes = []
         for rank, device in enumerate(devices):
             process = context.Process(target=_worker, args=(
-                rank, device, shards[rank], part_dir, args.dtype, verify if rank == 0 else [], args.log_every))
+                rank, device, shards[rank], part_dir, args.dtype, verify if rank == 0 else [], args.log_every,
+                args.precision))
             process.start()
             processes.append(process)
         for process in processes:
