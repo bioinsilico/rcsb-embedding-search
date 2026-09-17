@@ -22,6 +22,7 @@ import logging
 import os
 from dataclasses import dataclass
 
+import numpy as np
 import torch
 from torch.utils.data import Dataset
 
@@ -35,6 +36,23 @@ N_STATES = len(THREE_DI)
 STATE_INDEX = {state: index for index, state in enumerate(THREE_DI)}
 
 LABEL_FILES = {"sequence": "sequences.fasta", "three_di": "three_di.fasta", "exclusion": "exclusion.fasta"}
+
+#: Byte value -> state index, so a label string converts with one numpy lookup instead of
+#: a Python loop over millions of residues.
+_STATE_TABLE = np.zeros(256, dtype=np.int64)
+for _index, _state in enumerate(THREE_DI):
+    _STATE_TABLE[ord(_state)] = _index
+
+
+def _as_bytes(text: str) -> np.ndarray:
+    return np.frombuffer(text.encode("ascii"), dtype=np.uint8)
+
+
+def _usable(exclusion: str, reasons: set[str]) -> np.ndarray:
+    table = np.zeros(256, dtype=bool)
+    for reason in reasons:
+        table[ord(reason)] = True
+    return table[_as_bytes(exclusion)]
 
 
 def read_fasta(path: str) -> dict[str, str]:
@@ -77,14 +95,19 @@ class ThreeDiFromEmbeddingsDataset(Dataset):
             max_length: int | None = None,
             min_usable: int = 1,
             dtype: torch.dtype = torch.float32,
+            embeddings_dir: str | None = None,
+            ss8_dir: str | None = None,
     ):
         super().__init__()
         self.with_ss8 = with_ss8
         self.use_reasons = set(use_reasons)
         self.dtype = dtype
 
-        self.embeddings = PackedEmbeddingStore(os.path.join(store_path, "embeddings"))
-        self.ss8_store = PackedEmbeddingStore(os.path.join(store_path, "ss8_logits")) if with_ss8 else None
+        # The stores may live elsewhere than store_path (e.g. staged to node-local disk),
+        # while domains.tsv is still read from store_path.
+        self.embeddings = PackedEmbeddingStore(embeddings_dir or os.path.join(store_path, "embeddings"))
+        self.ss8_store = (PackedEmbeddingStore(ss8_dir or os.path.join(store_path, "ss8_logits"))
+                          if with_ss8 else None)
 
         labels = {field: read_fasta(os.path.join(labels_path, name)) for field, name in LABEL_FILES.items()}
         keys = self._sequence_keys(os.path.join(store_path, "domains.tsv"), split)
@@ -98,7 +121,7 @@ class ThreeDiFromEmbeddingsDataset(Dataset):
             if domain not in labels["three_di"]:
                 dropped["no labels"] += 1
                 continue
-            if key not in self.embeddings:
+            if key not in self.embeddings or (self.ss8_store is not None and key not in self.ss8_store):
                 dropped["no embedding"] += 1
                 continue
             # The embedding was computed from the store's sequence; the labels come from the
@@ -111,7 +134,7 @@ class ThreeDiFromEmbeddingsDataset(Dataset):
             if len(three_di) < min_length or (max_length is not None and len(three_di) > max_length):
                 dropped["length"] += 1
                 continue
-            if sum(reason in self.use_reasons for reason in exclusion) < min_usable:
+            if int(_usable(exclusion, self.use_reasons).sum()) < min_usable:
                 dropped["no usable residue"] += 1
                 continue
             self.domains.append(domain)
@@ -147,6 +170,20 @@ class ThreeDiFromEmbeddingsDataset(Dataset):
         """Residue count per sample, for length-bucketed batching."""
         return [len(self.three_di[domain]) for domain in self.domains]
 
+    def label_counts(self) -> torch.Tensor:
+        """Residues per 3Di state over the usable positions - the loss's class weights.
+
+        Vectorized because this runs on every rank before training starts; a Python
+        loop over the 6.9 M training residues takes ~14 s of startup per rank.
+        """
+        counts = np.zeros(N_STATES, dtype=np.int64)
+        for domain in self.domains:
+            states = _STATE_TABLE[_as_bytes(self.three_di[domain])]
+            counts += np.bincount(
+                states[_usable(self.exclusion[domain], self.use_reasons)], minlength=N_STATES
+            )
+        return torch.from_numpy(counts)
+
     def __getitem__(self, index: int) -> ThreeDiSample:
         domain = self.domains[index]
         key = self.keys[domain]
@@ -163,8 +200,8 @@ class ThreeDiFromEmbeddingsDataset(Dataset):
             domain=domain,
             embedding=embedding,
             ss8=ss8,
-            label=torch.tensor([STATE_INDEX[state] for state in three_di], dtype=torch.int64),
-            loss_mask=torch.tensor([reason in self.use_reasons for reason in exclusion], dtype=torch.bool),
+            label=torch.from_numpy(_STATE_TABLE[_as_bytes(three_di)]),
+            loss_mask=torch.from_numpy(_usable(exclusion, self.use_reasons)),
         )
 
 

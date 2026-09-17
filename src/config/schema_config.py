@@ -35,6 +35,39 @@ class InferenceConfig:
 
 
 @dataclass
+class ThreeDiDataset:
+    """One split of the 3Di head's data: a packed embedding store plus label FASTAs."""
+    store_path: Path = MISSING          # directory with embeddings/, ss8_logits/, domains.tsv
+    labels_path: Path = MISSING         # directory with sequences/three_di/exclusion .fasta
+    split: str = MISSING                # train | val | test
+    batch_size: int = MISSING
+    workers: Optional[int] = 0
+    use_reasons: str = "."              # exclusion characters kept in the loss
+    with_ss8: bool = False
+    min_length: int = 16
+    max_length: Optional[int] = None
+    length_bucket: Optional[int] = None  # batches drawn from a pool of this many sorted samples
+    local_scratch: Optional[str] = None  # stage the packed store to node-local storage
+
+
+@dataclass
+class ThreeDiTrainingConfig:
+    """Training config for the sequence -> 3Di head (``src/training/three_di_head.py``)."""
+    local_folder: Optional[LocalFolder]
+    checkpoint: Optional[str]
+    default_root_dir: Optional[str]
+    computing_resources: ComputingResources = MISSING
+    global_seed: int = MISSING
+    training_set: ThreeDiDataset = MISSING
+    validation_set: ThreeDiDataset = MISSING
+    training_parameters: TrainingParameters = MISSING
+    head: Any = MISSING                 # _target_ of the head to train
+    loss: Any = MISSING                 # _target_ of the loss
+    logger: LoggerConfig = MISSING
+    metadata: Optional[Any] = None
+
+
+@dataclass
 class NetworkParams:
     input_features: int = MISSING
     nhead: int = MISSING
