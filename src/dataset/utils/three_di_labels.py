@@ -114,11 +114,20 @@ def read_domain_atoms(path: str) -> struc.AtomArray:
     return atoms
 
 
+def sequence_from_atoms(atoms: struc.AtomArray) -> str:
+    """One letter per residue, in file order: the sequence ESM3 embeds."""
+    return "".join(_one_letter(r) for r in struc.get_residues(atoms)[1])
+
+
+def domain_sequence(path: str) -> str:
+    """The sequence ``parse_domain`` would return, without computing 3Di."""
+    return sequence_from_atoms(read_domain_atoms(path))
+
+
 def parse_domain(path: str, name: str | None = None) -> DomainLabels:
     """Read a domain PDB file into its sequence, 3Di labels and loss mask."""
     atoms = read_domain_atoms(path)
-    res_names = struc.get_residues(atoms)[1]
-    sequence = "".join(_one_letter(r) for r in res_names)
+    sequence = sequence_from_atoms(atoms)
 
     ca, cb, n, c = coord_for_atom_name_per_residue(atoms, ["CA", "CB", "N", "C"])
     length = len(sequence)
