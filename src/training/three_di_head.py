@@ -128,7 +128,12 @@ def main(cfg: ThreeDiTrainingConfig):
         use_distributed_sampler=cfg.training_set.length_bucket is None,
         default_root_dir=cfg.default_root_dir,
         logger=TensorBoardLogger(save_dir=cfg.logger.save_dir, name=cfg.logger.name),
-        callbacks=[ModelCheckpoint(monitor="expected_score", mode="max", save_last=True, save_top_k=3)],
+        # Select on validation NLL, not expected_score: expected_score rewards confidence,
+        # and overfitting raises confidence, so it kept the most overfit epochs. "nll" is
+        # plain cross-entropy whatever the training loss is, so it ranks every loss variant
+        # on the same scale (validation_loss would not, under soft targets or class weights).
+        callbacks=[ModelCheckpoint(monitor="nll", mode="min", save_last=True, save_top_k=3,
+                                   filename="{epoch}-{nll:.4f}")],
         plugins=[SLURMEnvironment(auto_requeue=False)] if SLURMEnvironment().detect() else None,
     )
     trainer.fit(model, train_dataloader, val_dataloader, ckpt_path=cfg.checkpoint)
