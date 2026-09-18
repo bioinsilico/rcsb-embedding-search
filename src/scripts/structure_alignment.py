@@ -20,6 +20,11 @@ Two measures of alignment quality:
 ``degrade_3di`` simulates an imperfect 3Di predictor, so the benefit of a predicted (rather
 than exact) 3Di string can be estimated before training one.
 
+A query can also carry a 3Di *profile*: per residue, a probability for each of the 20 states
+(``Chain.three_di_profile``). Schemes with a ``profile`` key then score query residue i
+against target symbol (a, s) with a position-specific row (``profile_matrix``), which
+reproduces the string path exactly for a one-hot profile at ``scale=1``.
+
 This module is imported by ``structure_alignment_benchmark.py``, which sits next to it.
 """
 from __future__ import annotations
@@ -32,7 +37,7 @@ from dataclasses import dataclass, replace
 
 import numpy as np
 import biotite.structure as struc
-from biotite.sequence import Alphabet, GeneralSequence, ProteinSequence
+from biotite.sequence import Alphabet, GeneralSequence, ProteinSequence, PurePositionalSequence
 from biotite.sequence.align import SubstitutionMatrix, align_optimal
 from biotite.structure.alphabet import to_3di
 from biotite.structure.io.pdb import PDBFile
@@ -46,6 +51,9 @@ PAIR_ALPHABET = Alphabet(list(range(len(AMINO_ACIDS) * len(THREE_DI))))
 # Foldseek's weighting of amino acid and 3Di substitution scores, and its gap penalties.
 FOLDSEEK_WEIGHTS = (1.4, 2.1)
 FOLDSEEK_GAPS = (-10, -1)
+# From the header of biotite's matrix_data/3Di.mat: the 3Di matrix is in bit/2 units and
+# lambda converts a score to natural-log odds.
+LAMBDA_3DI = 0.351568
 
 #: Scoring schemes compared by the benchmark. ``weights`` is (amino acid, 3Di); ``None``
 #: means plain BLOSUM62 over the amino acid alphabet alone.
@@ -72,6 +80,7 @@ class Chain:
     sequence: str          # amino acids, one letter per residue
     three_di: str          # 3Di states, same length
     ca_coord: np.ndarray   # (L, 3) CA coordinates, same order
+    three_di_profile: np.ndarray | None = None  # (L, 20) probabilities, THREE_DI order
 
     def __len__(self) -> int:
         return len(self.sequence)
@@ -137,23 +146,31 @@ def load_chain(path: str, chain_id: str | None = None, name: str | None = None) 
                  ca_coord=ca_atoms.coord.astype(np.float64))
 
 
+def _base_scores() -> tuple[np.ndarray, np.ndarray]:
+    """BLOSUM62 over AMINO_ACIDS (21 x 21) and the 3Di matrix over THREE_DI (20 x 20)."""
+    if "base" not in _MATRIX_CACHE:
+        blosum = SubstitutionMatrix.std_protein_matrix()
+        blosum_alphabet = blosum.get_alphabet1()
+        amino_scores = blosum.score_matrix()[np.ix_(
+            [blosum_alphabet.encode(c) for c in AMINO_ACIDS],
+            [blosum_alphabet.encode(c) for c in AMINO_ACIDS],
+        )]
+        structural = SubstitutionMatrix.std_3di_matrix()
+        structural_alphabet = structural.get_alphabet1()
+        structural_scores = structural.score_matrix()[np.ix_(
+            [structural_alphabet.encode(c) for c in THREE_DI],
+            [structural_alphabet.encode(c) for c in THREE_DI],
+        )]
+        _MATRIX_CACHE["base"] = (amino_scores, structural_scores)
+    return _MATRIX_CACHE["base"]
+
+
 def combined_matrix(weight_amino: float, weight_3di: float) -> SubstitutionMatrix:
     """Substitution matrix over (amino acid, 3Di) symbols, Foldseek-style weighted sum."""
     key = (weight_amino, weight_3di)
     if key in _MATRIX_CACHE:
         return _MATRIX_CACHE[key]
-    blosum = SubstitutionMatrix.std_protein_matrix()
-    blosum_alphabet = blosum.get_alphabet1()
-    amino_scores = blosum.score_matrix()[np.ix_(
-        [blosum_alphabet.encode(c) for c in AMINO_ACIDS],
-        [blosum_alphabet.encode(c) for c in AMINO_ACIDS],
-    )]
-    structural = SubstitutionMatrix.std_3di_matrix()
-    structural_alphabet = structural.get_alphabet1()
-    structural_scores = structural.score_matrix()[np.ix_(
-        [structural_alphabet.encode(c) for c in THREE_DI],
-        [structural_alphabet.encode(c) for c in THREE_DI],
-    )]
+    amino_scores, structural_scores = _base_scores()
     scores = (weight_amino * amino_scores[:, None, :, None]
               + weight_3di * structural_scores[None, :, None, :])
     scores = np.rint(scores).astype(np.int32).reshape(len(PAIR_ALPHABET), len(PAIR_ALPHABET))
@@ -161,24 +178,89 @@ def combined_matrix(weight_amino: float, weight_3di: float) -> SubstitutionMatri
     return _MATRIX_CACHE[key]
 
 
-def align(query: Chain, target: Chain, scheme: dict) -> tuple[np.ndarray, int]:
-    """Align two chains under one scheme; returns the aligned residue pairs and the score."""
+def profile_term(profile: np.ndarray, mode: str) -> np.ndarray:
+    """(L, 20) 3Di score of each query position against each target state.
+
+    ``argmax``   the most probable state's matrix row (the string path).
+    ``expected`` sum_k p(k) * M[k, s], the expected substitution score.
+    ``logodds``  (1 / lambda) * ln sum_k p(k) * exp(lambda * M[k, s]), the log-odds score of
+                 the mixture; 0 for a profile equal to the matrix background.
+    Both soft terms reduce to the argmax row, exactly, for a one-hot profile.
+    """
+    _, structural = _base_scores()
+    p = profile / profile.sum(axis=1, keepdims=True)
+    top = structural[p.argmax(axis=1)]
+    if mode == "argmax":
+        return top.astype(np.float64)
+    if mode == "expected":
+        return p @ structural
+    if mode == "logodds":
+        # Relative to the argmax row: log(1) = 0 keeps one-hot exact, and exponents stay
+        # below lambda * 26 ~ 9.
+        relative = np.exp(LAMBDA_3DI * (structural[None, :, :] - top[:, None, :]))
+        return top + np.log(np.einsum("lk,lks->ls", p, relative)) / LAMBDA_3DI
+    raise ValueError(f"unknown profile mode {mode!r}")
+
+
+def profile_matrix(query: Chain, weights: tuple[float, float], mode: str, scale: int = 1,
+                   min_confidence: float | None = None):
+    """Position-specific (L x 420) matrix for a query that carries a 3Di profile.
+
+    Row i scores query residue i against every (amino acid, 3Di) target symbol. Where the
+    profile's max probability is below ``min_confidence`` the 3Di term is dropped, leaving
+    amino acids only. Scores are scaled by ``scale`` before rounding to integers.
+    """
+    weight_amino, weight_3di = weights
+    amino_scores, _ = _base_scores()
+    structural = profile_term(query.three_di_profile, mode)
+    if min_confidence is not None:
+        low = query.three_di_profile.max(axis=1) < min_confidence
+        structural = np.where(low[:, None], 0.0, structural)
+    amino = query.pair_codes() // len(THREE_DI)
+    # Same expression and operand order as combined_matrix, so a one-hot profile at scale 1
+    # rounds bit-identically (x.5 ties included).
+    scores = (weight_amino * amino_scores[amino][:, :, None]
+              + weight_3di * structural[:, None, :]).reshape(len(query), len(PAIR_ALPHABET))
+    if scale != 1:
+        scores = scale * scores
+    query_seq = PurePositionalSequence(len(query))
+    matrix = SubstitutionMatrix(query_seq.get_alphabet(), PAIR_ALPHABET,
+                                np.rint(scores).astype(np.int32))
+    return query_seq, matrix
+
+
+def align(query: Chain, target: Chain, scheme: dict) -> tuple[np.ndarray, float]:
+    """Align two chains under one scheme; returns the aligned residue pairs and the score.
+
+    A scheme with a ``profile`` key uses the query's 3Di profile (see ``profile_matrix``);
+    its gaps are scaled with the scores and the score is reported unscaled.
+    """
+    scale = 1
     if scheme["weights"] is None:
         matrix = SubstitutionMatrix.std_protein_matrix()
         query_seq = ProteinSequence(query.sequence)
         target_seq = ProteinSequence(target.sequence)
+    elif scheme.get("profile"):
+        if query.three_di_profile is None:
+            raise ValueError(f"scheme needs a query 3Di profile; {query.name} has none")
+        scale = scheme.get("scale", 1)
+        query_seq, matrix = profile_matrix(query, scheme["weights"], scheme["profile"], scale,
+                                           scheme.get("min_confidence"))
+        target_seq = GeneralSequence(PAIR_ALPHABET, list(target.pair_codes()))
     else:
         matrix = combined_matrix(*scheme["weights"])
         query_seq = GeneralSequence(PAIR_ALPHABET, list(query.pair_codes()))
         target_seq = GeneralSequence(PAIR_ALPHABET, list(target.pair_codes()))
     alignment = align_optimal(
         query_seq, target_seq, matrix,
-        gap_penalty=scheme["gaps"], local=scheme["local"],
+        # Scaled penalties must stay Python ints: align_optimal type-checks them.
+        gap_penalty=scheme["gaps"] if scale == 1 else tuple(int(round(g * scale)) for g in scheme["gaps"]),
+        local=scheme["local"],
         terminal_penalty=False, max_number=1,
     )[0]
     trace = alignment.trace
     aligned = (trace[:, 0] != -1) & (trace[:, 1] != -1)
-    return trace[aligned], int(alignment.score)
+    return trace[aligned], alignment.score / scale if scale != 1 else int(alignment.score)
 
 
 def tm_score(pairs: np.ndarray, query: Chain, target: Chain, length_norm: int) -> float:
@@ -322,7 +404,8 @@ def degrade_3di(chain: Chain, accuracy: float, mode: str, rng: random.Random) ->
             continue
         weights = table[alphabet.index(state)]
         states[position] = alphabet[rng.choices(range(len(alphabet)), weights=weights)[0]]
-    return replace(chain, three_di="".join(states))
+    # A profile would no longer match the degraded string.
+    return replace(chain, three_di="".join(states), three_di_profile=None)
 
 
 def write_ca_pdb(chain: Chain, path: str, chain_id: str = "A") -> None:

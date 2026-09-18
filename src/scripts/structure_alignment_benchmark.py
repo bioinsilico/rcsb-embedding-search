@@ -33,6 +33,13 @@ Examples::
     python src/scripts/structure_alignment_benchmark.py sweep \
         --pairs /data/scop-zenodo/TMfast.dual.csv --structures /data/scop-zenodo/pdb \
         --limit 200 --usalign ./USalign
+
+    # Predicted 3Di profiles (predict_three_di.py profiles.npz): adds, per --profile-schemes
+    # base, one column per --profile-mode and --min-confidence, e.g. 3di_aa_sw:soft>0.5.
+    python src/scripts/structure_alignment_benchmark.py benchmark \
+        --pairs test_pairs.csv --structures /data/cath_23M/pdb --usalign ./USalign \
+        --query-profile predictions/transformer/profiles.npz \
+        --profile-mode argmax expected logodds --min-confidence 0.5
 """
 from __future__ import annotations
 
@@ -46,8 +53,11 @@ import tempfile
 import time
 from dataclasses import replace
 
+import numpy as np
+
 from structure_alignment import (
     SCHEMES,
+    THREE_DI,
     UnreadableStructure,
     align,
     degrade_3di,
@@ -76,12 +86,13 @@ def median(values):
 
 
 def print_table(title, rows, columns, cell, note=None):
+    width = max([13] + [len(c) + 1 for c in columns])
     print(f"\n{title}")
-    print(f"{'subset':<10}{'n':>5}  " + "".join(f"{c:>13}" for c in columns))
+    print(f"{'subset':<10}{'n':>5}  " + "".join(f"{c:>{width}}" for c in columns))
     for label, selected in rows:
         if not selected:
             continue
-        print(f"{label:<10}{len(selected):>5}  " + "".join(f"{cell(selected, c):>13.3f}" for c in columns))
+        print(f"{label:<10}{len(selected):>5}  " + "".join(f"{cell(selected, c):>{width}.3f}" for c in columns))
     if note:
         print(f"  ({note})")
 
@@ -118,11 +129,13 @@ def sample_pairs(path, min_tm, limit, rng, line_rate=1.0):
     return reservoir
 
 
-def evaluate_pair(query, target, reference):
-    """Every scheme's alignment quality for one pair."""
+def evaluate_pair(query, target, reference, schemes=SCHEMES):
+    """Every scheme's alignment quality for one pair (profile schemes need a query profile)."""
     length_norm = min(len(query), len(target))
     out = {}
-    for name, scheme in SCHEMES.items():
+    for name, scheme in schemes.items():
+        if scheme.get("profile") and query.three_di_profile is None:
+            continue
         pairs, score = align(query, target, scheme)
         entry = dict(
             tm=tm_score(pairs, query, target, length_norm),
@@ -206,6 +219,42 @@ def read_fasta(path):
     return records
 
 
+PROFILE_TAGS = {"argmax": "hard", "expected": "soft", "logodds": "lo"}
+
+
+def read_profiles(path, temperature=1.0):
+    """``{id: (L, 20) probabilities}`` from an .npz of log-probabilities.
+
+    ``temperature`` rescales the log-probabilities before normalizing, which equals
+    softmax(logits / T) because a log-softmax differs from the logits by a constant.
+    """
+    data = np.load(path)
+    if "__alphabet__" in data.files and "".join(data["__alphabet__"]) != THREE_DI:
+        sys.exit(f"{path}: 3Di state order differs from {THREE_DI}")
+    profiles = {}
+    for key in data.files:
+        if key.startswith("__"):
+            continue
+        log_p = data[key].astype(np.float64) / temperature
+        p = np.exp(log_p - log_p.max(axis=1, keepdims=True))
+        profiles[key] = p / p.sum(axis=1, keepdims=True)
+    return profiles
+
+
+def profile_schemes(args):
+    """Extra schemes built from the profile flags, e.g. ``3di_aa_sw:soft>0.5``."""
+    if not getattr(args, "query_profile", None):
+        return {}
+    out = {}
+    for base in args.profile_schemes:
+        for mode in args.profile_mode:
+            for threshold in [None] + list(args.min_confidence):
+                name = f"{base}:{PROFILE_TAGS[mode]}" + ("" if threshold is None else f">{threshold:g}")
+                out[name] = dict(SCHEMES[base], profile=mode, scale=args.profile_scale,
+                                 min_confidence=threshold)
+    return out
+
+
 def collect(args, need_reference):
     """Load, align and score sampled pairs; returns one record per usable pair."""
     rng = random.Random(args.seed)
@@ -216,6 +265,15 @@ def collect(args, need_reference):
     # Predicted query 3Di, if given: only pairs whose query has a prediction are kept,
     # which is also how the evaluation stays inside the held-out split.
     predicted = read_fasta(args.query_3di) if getattr(args, "query_3di", None) else None
+    if getattr(args, "query_profile", None):
+        if predicted is not None:
+            sys.exit("--query-3di and --query-profile are exclusive: the profile's argmax is the string")
+        profiles = read_profiles(args.query_profile, args.profile_temperature)
+        # The argmax string comes from the same file, so string and profile schemes agree.
+        predicted = {name: "".join(THREE_DI[k] for k in p.argmax(axis=1))
+                     for name, p in profiles.items()}
+    else:
+        profiles = None
     skipped_length = 0
 
     def chain(identifier):
@@ -246,7 +304,8 @@ def collect(args, need_reference):
             if len(predicted[identifier_a]) != len(query):
                 skipped_length += 1
                 continue
-            query = replace(query, three_di=predicted[identifier_a])
+            query = replace(query, three_di=predicted[identifier_a],
+                            three_di_profile=None if profiles is None else profiles[identifier_a])
         if not (args.min_length <= len(query) <= args.max_length
                 and args.min_length <= len(target) <= args.max_length):
             continue
@@ -261,16 +320,18 @@ def collect(args, need_reference):
         if len(records) % 50 == 0:
             print(f"  {len(records)} pairs in {time.time() - start:.0f}s", flush=True)
     if predicted is not None:
-        print(f"predicted query 3Di from {args.query_3di}: {len(predicted):,} domains available, "
+        print(f"predicted query 3Di from {args.query_3di or args.query_profile}: "
+              f"{len(predicted):,} domains available, "
               f"{skipped_length} pairs skipped on a length mismatch with the structure")
     return records
 
 
 def command_benchmark(args):
     records = collect(args, need_reference=False)
+    schemes = {**SCHEMES, **profile_schemes(args)}
     for record in records:
         query, target = record.pop("chains")
-        record["schemes"] = evaluate_pair(query, target, record["reference"])
+        record["schemes"] = evaluate_pair(query, target, record["reference"], schemes)
         record.pop("reference")
     if not records:
         sys.exit("no usable pairs")
@@ -279,7 +340,7 @@ def command_benchmark(args):
           + (f", median reference TM={median([r['reference_tm'] for r in with_reference]):.2f}"
              if with_reference else ""))
 
-    columns = list(SCHEMES)
+    columns = list(schemes)
     bins = [(label, [r for r in records if predicate(r["identity"])])
             for label, predicate in IDENTITY_BINS]
     print_table("MEDIAN TM-score of the superposition each alignment implies", bins, columns,
@@ -385,6 +446,24 @@ def main():
         sub.add_argument("--query-3di", default=None,
                          help="FASTA of predicted query 3Di (predict_three_di.py); pairs whose "
                               "query is absent from it are skipped")
+        sub.add_argument("--query-profile", default=None,
+                         help=".npz of predicted query 3Di profiles (predict_three_di.py "
+                              "profiles.npz: (L, 20) log-probabilities keyed by domain); "
+                              "the argmax replaces the query 3Di as --query-3di would")
+        sub.add_argument("--profile-schemes", nargs="+", default=["3di_aa_sw"],
+                         choices=[n for n, s in SCHEMES.items() if s["weights"] is not None],
+                         help="schemes to rerun with the profile [3di_aa_sw]")
+        sub.add_argument("--profile-mode", nargs="+", default=["argmax", "expected", "logodds"],
+                         choices=list(PROFILE_TAGS),
+                         help="3Di term: argmax row, expected score, or mixture log-odds "
+                              "[argmax expected logodds]")
+        sub.add_argument("--min-confidence", type=float, nargs="*", default=[],
+                         help="also run each mode with the 3Di term dropped where max p < t")
+        sub.add_argument("--profile-scale", type=int, default=100,
+                         help="integer scale of profile scores and gaps; 1 reproduces the "
+                              "string schemes' rounding exactly [100]")
+        sub.add_argument("--profile-temperature", type=float, default=1.0,
+                         help="softmax temperature applied to the stored log-probabilities [1.0]")
         add_common(sub)
         sub.set_defaults(func=func)
 

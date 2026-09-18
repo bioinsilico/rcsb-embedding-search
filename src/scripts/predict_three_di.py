@@ -9,6 +9,11 @@ It also reports per-residue accuracy, top-3 accuracy and calibration on the spli
 writes the per-residue confidence (max probability) as a second FASTA, since masking
 low-confidence query positions is a lever the brief calls out.
 
+``profiles.npz`` keeps the full distribution: one float32 (L, 20) array of log-probabilities
+per domain, columns in THREE_DI order (also stored under ``__alphabet__``), for
+``structure_alignment_benchmark.py --query-profile``. Log-probabilities rather than
+probabilities, so the benchmark can re-temper them (softmax(log p / T) = softmax(logits / T)).
+
     python predict_three_di.py --checkpoint .../epoch=39.ckpt \\
         --store .../esm3-sequence --labels .../esm3-sequence --split test \\
         --out-dir .../predictions/cnn
@@ -105,7 +110,7 @@ def main() -> None:
     loader = DataLoader(dataset, batch_size=args.batch_size, num_workers=args.workers,
                         collate_fn=collate_three_di)
 
-    predictions, confidences = {}, {}
+    predictions, confidences, profiles = {}, {}, {}
     n = correct = top3 = 0
     confidence_sum = 0.0
     with torch.inference_mode():
@@ -116,12 +121,15 @@ def main() -> None:
                 ss8=batch["ss8"].to(args.device) if head.with_ss8 else None,
             ).float().cpu()
             probability = F.softmax(logits, dim=-1)
+            log_probability = F.log_softmax(logits, dim=-1)
             best = probability.max(dim=-1)
             for i, domain in enumerate(batch["domain"]):
                 length = int((~batch["padding_mask"][i]).sum())
                 states = best.indices[i, :length].numpy()
                 scores = best.values[i, :length].numpy()
                 predictions[domain] = "".join(THREE_DI[s] for s in states)
+                # float32: float16 can flip the argmax on exact ties (~1e-4 of residues).
+                profiles[domain] = log_probability[i, :length].numpy().astype(np.float32)
                 # 0-9 buckets: readable next to the 3Di string and enough to threshold on.
                 confidences[domain] = "".join(
                     CONFIDENCE_ALPHABET[min(int(s * 10), 9)] for s in scores
@@ -139,6 +147,8 @@ def main() -> None:
     header = {d: f"split={args.split} length={len(s)}" for d, s in predictions.items()}
     write_fasta(os.path.join(args.out_dir, "predicted_three_di.fasta"), predictions, header)
     write_fasta(os.path.join(args.out_dir, "confidence.fasta"), confidences, header)
+    np.savez_compressed(os.path.join(args.out_dir, "profiles.npz"),
+                        __alphabet__=np.array(list(THREE_DI)), **profiles)
     summary = dict(
         checkpoint=os.path.abspath(args.checkpoint), split=args.split, head=type(head).__name__,
         domains=len(predictions), residues_scored=n,
