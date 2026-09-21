@@ -51,6 +51,8 @@ def main() -> None:
     parser.add_argument("--gap-open", type=float, nargs="+", default=[10, 15, 20, 25])
     parser.add_argument("--gap-extend", type=float, nargs="+", default=[1, 2])
     parser.add_argument("--limit", type=int, default=600)
+    parser.add_argument("--min-tm", type=float, default=0.7,
+                        help="minimum reference TM of a pair; lower it for remote homologs [0.7]")
     parser.add_argument("--min-length", type=int, default=60)
     parser.add_argument("--max-length", type=int, default=600)
     parser.add_argument("--seed", type=int, default=20260921)
@@ -60,7 +62,7 @@ def main() -> None:
     args = parser.parse_args()
 
     rng = random.Random(args.seed)
-    candidates = sample_pairs(args.pairs, 0.7, args.limit * 4, rng)
+    candidates = sample_pairs(args.pairs, args.min_tm, args.limit * 4, rng)
     profiles = read_profiles(args.query_profile, args.profile_temperature)
     targets = (read_target_codes(args.target_profile, args.target_kernel, args.profile_temperature)
                if args.target_profile else None)
@@ -107,7 +109,7 @@ def main() -> None:
     if not records:
         raise SystemExit("no usable pairs")
     identity = np.array([r["identity"] for r in records])
-    print(f"{len(records)} validation pairs ({int((identity < 0.2).sum())} below 20% identity); "
+    print(f"{len(records)} pairs (TM >= {args.min_tm}; {int((identity < 0.2).sum())} below 20% identity); "
           f"mode {args.mode}, targets {'predicted' if targets is not None else 'exact'}")
 
     results = []
