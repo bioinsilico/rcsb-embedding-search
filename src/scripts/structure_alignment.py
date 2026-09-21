@@ -48,6 +48,16 @@ AMINO_ACIDS = "ACDEFGHIKLMNPQRSTVWYX"
 THREE_DI = "acdefghiklmnpqrstvwy"
 PAIR_ALPHABET = Alphabet(list(range(len(AMINO_ACIDS) * len(THREE_DI))))
 
+
+def pair_alphabet(n_codes: int = len(THREE_DI)) -> Alphabet:
+    """Alphabet of (amino acid, structural code) symbols; ``n_codes`` structural codes."""
+    if n_codes == len(THREE_DI):
+        return PAIR_ALPHABET
+    key = ("pair_alphabet", n_codes)
+    if key not in _MATRIX_CACHE:
+        _MATRIX_CACHE[key] = Alphabet(list(range(len(AMINO_ACIDS) * n_codes)))
+    return _MATRIX_CACHE[key]
+
 # Foldseek's weighting of amino acid and 3Di substitution scores, and its gap penalties.
 FOLDSEEK_WEIGHTS = (1.4, 2.1)
 FOLDSEEK_GAPS = (-10, -1)
@@ -81,6 +91,8 @@ class Chain:
     three_di: str          # 3Di states, same length
     ca_coord: np.ndarray   # (L, 3) CA coordinates, same order
     three_di_profile: np.ndarray | None = None  # (L, 20) probabilities, THREE_DI order
+    target_codes: np.ndarray | None = None      # (L,) codes into a target kernel, when this
+                                                # chain is a target whose 3Di is predicted
 
     def __len__(self) -> int:
         return len(self.sequence)
@@ -95,17 +107,28 @@ class Chain:
         """
         return self.three_di.count("d") / max(1, len(self.three_di))
 
-    def pair_codes(self) -> np.ndarray:
-        """Encode residues as single symbols of the combined (amino acid, 3Di) alphabet."""
-        amino = np.array([
+    def amino_codes(self) -> np.ndarray:
+        return np.array([
             AMINO_ACIDS.index(c) if c in AMINO_ACIDS else AMINO_ACIDS.index("X")
             for c in self.sequence
         ])
-        structural = np.array([
-            THREE_DI.index(c) if c in THREE_DI else THREE_DI.index("d")
-            for c in self.three_di
-        ])
-        return amino * len(THREE_DI) + structural
+
+    def pair_codes(self, n_codes: int = len(THREE_DI)) -> np.ndarray:
+        """Encode residues as single symbols of the combined (amino acid, structural) alphabet.
+
+        The structural part is the 3Di state by default. ``target_codes`` is used only when
+        the caller asks for a wider alphabet (``n_codes`` beyond the 20 states), i.e. when a
+        kernel interprets the codes; every other scheme reads the 3Di string as usual, which
+        for a predicted target is its most likely state.
+        """
+        if self.target_codes is not None and n_codes != len(THREE_DI):
+            structural = self.target_codes
+        else:
+            structural = np.array([
+                THREE_DI.index(c) if c in THREE_DI else THREE_DI.index("d")
+                for c in self.three_di
+            ])
+        return self.amino_codes() * n_codes + structural
 
 
 def load_chain(path: str, chain_id: str | None = None, name: str | None = None) -> Chain:
@@ -178,8 +201,16 @@ def combined_matrix(weight_amino: float, weight_3di: float) -> SubstitutionMatri
     return _MATRIX_CACHE[key]
 
 
-def profile_term(profile: np.ndarray, mode: str) -> np.ndarray:
-    """(L, 20) 3Di score of each query position against each target state.
+def profile_term(profile: np.ndarray, mode: str, kernel: np.ndarray | None = None) -> np.ndarray:
+    """(L, C) 3Di score of each query position against each target code.
+
+    ``kernel`` is (C, 20): the distribution over true states a target code stands for. The
+    default is the identity, i.e. C = 20 exact states, which is a target whose 3Di is known.
+    A predicted target instead stores a code per residue (its predicted state and confidence),
+    and the kernel says what that code implies - so query uncertainty and target uncertainty
+    are combined in one score:
+        expected  sum_k sum_l p(k) q(l) M[k, l]
+        logodds   (1 / lambda) ln sum_k sum_l p(k) q(l) exp(lambda M[k, l])
 
     ``argmax``   the most probable state's matrix row (the string path).
     ``expected`` sum_k p(k) * M[k, s], the expected substitution score.
@@ -189,21 +220,27 @@ def profile_term(profile: np.ndarray, mode: str) -> np.ndarray:
     """
     _, structural = _base_scores()
     p = profile / profile.sum(axis=1, keepdims=True)
-    top = structural[p.argmax(axis=1)]
+    # scores[k, c]: state k against target code c. Identity kernel -> the matrix itself.
+    scores = structural if kernel is None else structural @ kernel.T
+    top = scores[p.argmax(axis=1)]
     if mode == "argmax":
         return top.astype(np.float64)
     if mode == "expected":
-        return p @ structural
+        return p @ scores
     if mode == "logodds":
         # Relative to the argmax row: log(1) = 0 keeps one-hot exact, and exponents stay
-        # below lambda * 26 ~ 9.
-        relative = np.exp(LAMBDA_3DI * (structural[None, :, :] - top[:, None, :]))
-        return top + np.log(np.einsum("lk,lks->ls", p, relative)) / LAMBDA_3DI
+        # below lambda * 26 ~ 9. With a kernel the mixture is over (k, l) at once, which is
+        # why the kernel is applied to exp(lambda M) rather than to M.
+        if kernel is None:
+            relative = np.exp(LAMBDA_3DI * (structural[None, :, :] - top[:, None, :]))
+            return top + np.log(np.einsum("lk,lks->ls", p, relative)) / LAMBDA_3DI
+        mixed = np.exp(LAMBDA_3DI * structural) @ kernel.T              # (20, C)
+        return np.log(p @ mixed) / LAMBDA_3DI
     raise ValueError(f"unknown profile mode {mode!r}")
 
 
 def profile_matrix(query: Chain, weights: tuple[float, float], mode: str, scale: int = 1,
-                   min_confidence: float | None = None):
+                   min_confidence: float | None = None, kernel: np.ndarray | None = None):
     """Position-specific (L x 420) matrix for a query that carries a 3Di profile.
 
     Row i scores query residue i against every (amino acid, 3Di) target symbol. Where the
@@ -212,19 +249,20 @@ def profile_matrix(query: Chain, weights: tuple[float, float], mode: str, scale:
     """
     weight_amino, weight_3di = weights
     amino_scores, _ = _base_scores()
-    structural = profile_term(query.three_di_profile, mode)
+    structural = profile_term(query.three_di_profile, mode, kernel)
+    n_codes = structural.shape[1]
     if min_confidence is not None:
         low = query.three_di_profile.max(axis=1) < min_confidence
         structural = np.where(low[:, None], 0.0, structural)
-    amino = query.pair_codes() // len(THREE_DI)
+    amino = query.amino_codes()
     # Same expression and operand order as combined_matrix, so a one-hot profile at scale 1
     # rounds bit-identically (x.5 ties included).
     scores = (weight_amino * amino_scores[amino][:, :, None]
-              + weight_3di * structural[:, None, :]).reshape(len(query), len(PAIR_ALPHABET))
+              + weight_3di * structural[:, None, :]).reshape(len(query), len(AMINO_ACIDS) * n_codes)
     if scale != 1:
         scores = scale * scores
     query_seq = PurePositionalSequence(len(query))
-    matrix = SubstitutionMatrix(query_seq.get_alphabet(), PAIR_ALPHABET,
+    matrix = SubstitutionMatrix(query_seq.get_alphabet(), pair_alphabet(n_codes),
                                 np.rint(scores).astype(np.int32))
     return query_seq, matrix
 
@@ -244,9 +282,11 @@ def align(query: Chain, target: Chain, scheme: dict) -> tuple[np.ndarray, float]
         if query.three_di_profile is None:
             raise ValueError(f"scheme needs a query 3Di profile; {query.name} has none")
         scale = scheme.get("scale", 1)
+        kernel = scheme.get("target_kernel")
         query_seq, matrix = profile_matrix(query, scheme["weights"], scheme["profile"], scale,
-                                           scheme.get("min_confidence"))
-        target_seq = GeneralSequence(PAIR_ALPHABET, list(target.pair_codes()))
+                                           scheme.get("min_confidence"), kernel)
+        n_codes = len(THREE_DI) if kernel is None else kernel.shape[0]
+        target_seq = GeneralSequence(pair_alphabet(n_codes), list(target.pair_codes(n_codes)))
     else:
         matrix = combined_matrix(*scheme["weights"])
         query_seq = GeneralSequence(PAIR_ALPHABET, list(query.pair_codes()))

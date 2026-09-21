@@ -222,6 +222,30 @@ def read_fasta(path):
 PROFILE_TAGS = {"argmax": "hard", "expected": "soft", "logodds": "lo"}
 
 
+def read_target_codes(path, kernel_path, temperature=1.0):
+    """``{id: (argmax 3Di string, codes)}`` for targets whose 3Di is predicted.
+
+    A sequence-only database has no structure, so its targets carry predicted 3Di. Each
+    residue becomes one byte - the predicted state plus a confidence bucket - and the kernel
+    (fit_target_kernel.py) says what that code implies. Without a kernel the target is just
+    the predicted 3Di string, which is the plain 1-byte representation.
+    """
+    profiles = read_profiles(path, temperature)
+    buckets = int(np.load(kernel_path)["buckets"]) if kernel_path else None
+    out = {}
+    for name, p in profiles.items():
+        state = p.argmax(axis=1)
+        string = "".join(THREE_DI[k] for k in state)
+        if buckets is None:
+            out[name] = (string, None)
+            continue
+        lowest = 1.0 / len(THREE_DI)
+        scaled = (p.max(axis=1) - lowest) / (1.0 - lowest)
+        bucket = np.clip((scaled * buckets).astype(int), 0, buckets - 1)
+        out[name] = (string, state * buckets + bucket)
+    return out
+
+
 def read_profiles(path, temperature=1.0):
     """``{id: (L, 20) probabilities}`` from an .npz of log-probabilities.
 
@@ -242,9 +266,14 @@ def read_profiles(path, temperature=1.0):
 
 
 def profile_schemes(args):
-    """Extra schemes built from the profile flags, e.g. ``3di_aa_sw:soft>0.5``."""
+    """Extra schemes built from the profile flags, e.g. ``3di_aa_sw:soft>0.5``.
+
+    With ``--target-kernel`` each one also gets a ``+tk`` variant, which reads the target's
+    confidence code through the kernel instead of taking its predicted state at face value.
+    """
     if not getattr(args, "query_profile", None):
         return {}
+    kernel = np.load(args.target_kernel)["kernel"] if getattr(args, "target_kernel", None) else None
     out = {}
     for base in args.profile_schemes:
         for mode in args.profile_mode:
@@ -252,6 +281,8 @@ def profile_schemes(args):
                 name = f"{base}:{PROFILE_TAGS[mode]}" + ("" if threshold is None else f">{threshold:g}")
                 out[name] = dict(SCHEMES[base], profile=mode, scale=args.profile_scale,
                                  min_confidence=threshold)
+                if kernel is not None:
+                    out[name + "+tk"] = dict(out[name], target_kernel=kernel)
     return out
 
 
@@ -274,6 +305,11 @@ def collect(args, need_reference):
                      for name, p in profiles.items()}
     else:
         profiles = None
+    # Predicted targets, for a sequence-only database.
+    targets = (read_target_codes(args.target_profile, getattr(args, "target_kernel", None),
+                                 args.profile_temperature)
+               if getattr(args, "target_profile", None) else None)
+    skipped_target = 0
     skipped_length = 0
 
     def chain(identifier):
@@ -306,6 +342,16 @@ def collect(args, need_reference):
                 continue
             query = replace(query, three_di=predicted[identifier_a],
                             three_di_profile=None if profiles is None else profiles[identifier_a])
+        if targets is not None:
+            # Both sides must be predicted for this to measure a sequence-only database.
+            if identifier_b not in targets:
+                skipped_target += 1
+                continue
+            string, codes = targets[identifier_b]
+            if len(string) != len(target):
+                skipped_length += 1
+                continue
+            target = replace(target, three_di=string, target_codes=codes)
         if not (args.min_length <= len(query) <= args.max_length
                 and args.min_length <= len(target) <= args.max_length):
             continue
@@ -319,6 +365,11 @@ def collect(args, need_reference):
                             chains=(query, target), reference=reference))
         if len(records) % 50 == 0:
             print(f"  {len(records)} pairs in {time.time() - start:.0f}s", flush=True)
+    if targets is not None:
+        print(f"predicted target 3Di from {args.target_profile}"
+              + (f" with kernel {args.target_kernel}" if getattr(args, "target_kernel", None) else
+                 " (predicted state only, no confidence)")
+              + f": {skipped_target} pairs skipped for a target without a prediction")
     if predicted is not None:
         print(f"predicted query 3Di from {args.query_3di or args.query_profile}: "
               f"{len(predicted):,} domains available, "
@@ -462,6 +513,12 @@ def main():
         sub.add_argument("--profile-scale", type=int, default=100,
                          help="integer scale of profile scores and gaps; 1 reproduces the "
                               "string schemes' rounding exactly [100]")
+        sub.add_argument("--target-profile", default=None,
+                         help="predicted 3Di for the TARGETS too (sequence-only database): the "
+                              "same profiles.npz format; pairs whose target is absent are skipped")
+        sub.add_argument("--target-kernel", default=None,
+                         help="target kernel from fit_target_kernel.py; adds a '+tk' variant of "
+                              "each profile scheme that reads the target's confidence code")
         sub.add_argument("--profile-temperature", type=float, default=1.0,
                          help="softmax temperature applied to the stored log-probabilities [1.0]")
         add_common(sub)
