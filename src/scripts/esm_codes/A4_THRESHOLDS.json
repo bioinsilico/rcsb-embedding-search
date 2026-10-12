@@ -1,0 +1,622 @@
+{
+ "name": "A4_THRESHOLDS",
+ "format_version": 1,
+ "system": "esm-codes-v1",
+ "calibration_version": "foldmatch-evalue-M8_s0-D_fmr-pnlU50s1000-M3t999-v1",
+ "plan": "FoldMatch esm-codes integration plan FINAL v1, section 4 P0.5 (thresholds) and section 8 P8 A4",
+ "status": "PRE-REGISTERED from the P0.5 evidence. Commit before A4 runs; the A4 output must record this file's sha256. Any change after A4 has started is a new file version with a stated reason, never an in-place edit.",
+ "created": "2026-09-27 19:57:23 MDT",
+ "evidence": {
+  "esm3_parity_json": {
+   "path": "/private/tmp/claude-501/-Users-joan-devel-rcsb-embedding-search/d9266e69-77ea-4121-a428-2e6f3bcc4ca2/scratchpad/p0/parity/esm3_parity.json",
+   "nersc": "/pscratch/sd/j/jsegura/embcomp/p0/parity/esm3_parity.json",
+   "md5": "47bf0ef9a8c3f6158bcf45a4ef407b35",
+   "sha256": "6a1a29eb488d668aaab82c8b3c1f293ab29076b797dee29bfbc3eb98211a48e0"
+  },
+  "script": {
+   "path": "/Users/joan/devel/rcsb-embedding-search/src/scripts/esm_codes/esm3_parity.py",
+   "md5": "5a928652ba7d0a146c4982d73c1a463f"
+  },
+  "inputs_sets_json": {
+   "path": "/private/tmp/claude-501/-Users-joan-devel-rcsb-embedding-search/d9266e69-77ea-4121-a428-2e6f3bcc4ca2/scratchpad/p0/parity/inputs/sets.json",
+   "md5": "5a07b6489ea1c3040c3950aee423b4f6",
+   "sha256": "fb1e30af7a1730e0dd171867c72343678e76544d1a9e0eebf3c035c14fbb43a5"
+  },
+  "foldmatch": "3c3625c83f8ec84adb71948ce9c4f040094814ee js/dev-esm-code-alignments (Mac working-tree copy of src/; untracked/modified entries: ?? tests/resources/esm_codes/ )",
+  "archive": "/global/homes/j/jsegura/esm_codes_archive/p0/parity (NERSC home; inputs/sets.json, esm3_parity.json, compact encodings of every device incl. the A5 GPU encodings, MD5SUMS)"
+ },
+ "protocol": {
+  "what": "A4 re-runs the P0.5 measurement through FoldMatch's production implementation (ESM3 residue path of build/query, the P2 encoder module, the P3 kernel, the P4 statistics) on each device class it claims, and compares with the RESEARCH encodings exactly as P0.5 did.",
+  "inputs": {
+   "panel": {
+    "n_records": 1000,
+    "residues": 355626,
+    "fasta_md5": "6bd40944d77b5ab632b213c39611fda8"
+   },
+   "enccheck": {
+    "n_records": 50,
+    "residues": 9072,
+    "fasta_md5": "7e8f7c22d43400da46fa185516697656"
+   },
+   "chains": {
+    "n_records": 559,
+    "residues": 124052,
+    "fasta_md5": "95427590f9b1125954495cb6629232b2"
+   },
+   "q200": {
+    "n_records": 200,
+    "residues": 42101,
+    "fasta_md5": "7da0aaecb39533d13668132f09a58d79"
+   },
+   "tsub": {
+    "n_records": 789,
+    "residues": 295073,
+    "fasta_md5": "d57be87dcf2f6de76c2c63d1837f61ac"
+   }
+  },
+  "inputs_note": "sets.json (sha256 above) fixes every id, sequence key (sha1 of the normalised sequence) and order; q200 = 200 benchmark queries stratified by M3 length bin (34/34/33/33/33/33, default_rng(20260927)); tsub = the 789 targets of P_sub",
+  "P_sub": {
+   "n_pairs": 831,
+   "n_targets": 789,
+   "definition": "research lnE <= 0 (E <= 1): shipped table all, Q90 = bench_q90_shipped.npy (shipped panel), N = annotated residues of the 50,000 benchmark targets; <= 8 hits per query sampled with default_rng(20260928)",
+   "pairs_sha256": "378a1155aac103dd4cefbbea9c65fa5bd2bea58a78544bf864cda390afeac6b3"
+  },
+  "reference": "research encodings: queries evalue/encode/out/queries.L2m_B8_s0.npz (md5 e821497f...), targets targets.L2m_B8_s0.npz (cfee06cd...), panel shipped_panel_codes.npz (15cc1c7b...), chains sw_mlp/enc/L2m_B8_s0.chains.npz (55198660...), enc_check sw_mlp/enc_check/L2m_B8_s0.npz; research lnE from the research S_D matrices (evalue/score/out) and bench_q90_shipped.npy (P0.5 recomputation: Q90 identical, P_sub S max |d| 1e-4)",
+  "evalue": {
+   "formula": "lnE = lnK(m) + ln m + ln N - lambda(m) (S - Q90); lambda, lnK = np.interp(ln m, ln centre, table) (ship_final 'all'); S = float64(S_f) - float64(S_r), setting D (1.0; 5/0.5), S_r = query rows reversed; Q90 = np.quantile(S(query, 1,000 shipped panel codes), 0.9); m = query length; N = annotated residues of the 50,000 benchmark targets",
+   "N": 8557236.0,
+   "setting_D": [
+    1.0,
+    5.0,
+    0.5
+   ]
+  },
+  "metrics": {
+   "code_bits": "fraction of equal code bits vs the research codes, POOLED over panel + enccheck + chains + tsub (783,823 residues, 50,164,672 bits)",
+   "dlnE": "lnE(config) - lnE(research) on the P_sub pairs; config = (query-encoding device, target-code device); each config's Q90 = its own q vs the SHIPPED research panel codes; |dlnE| median and P95 over the pairs",
+   "dF1": "mean SW F1 (setting D, chain_eval.prf vs the US-align primary reference) over the 582 similar chain-set pairs minus the research M8_s0 setting-D value 0.613393 (evalue/f1_settings/results/chains/M8_s0_D.npz); two-sided",
+   "xcpu_bits": "code-bit agreement between two CPU fp32 runs on different machines / OS / BLAS, pooled over the compared residues (the F2c cross-machine threshold)"
+  },
+  "device_classes": {
+   "gpu": "CUDA, FoldMatch default (fp32 weights, bf16 autocast inside ESM3.logits); P0.5: 4 x A100-SXM4-40GB, torch 2.11.0+cu130 (enc_check also on an A100-PCIE-40GB: identical 576,399 / 580,608 bits)",
+   "cpu": "fp32 CPU; P0.5: AMD EPYC 7763 Linux (16 ranks x 8 threads, torch 2.11.0+cu130 CPU path, MKL) and Apple M1 Max macOS (7 threads, torch 2.11.0, Accelerate)",
+   "mps": "Apple MPS fp32 (D18); P0.5: M1 Max, torch 2.11.0",
+   "mixed": "query encodings from one device class, target codes from another (every ordered pair of the device classes A4 runs)"
+  }
+ },
+ "gates": [
+  {
+   "id": "A4-bits",
+   "metric": "code_bits",
+   "applies_to": [
+    "gpu",
+    "cpu",
+    "mps"
+   ],
+   "threshold": {
+    "gpu": 0.99,
+    "cpu": 0.99,
+    "mps": 0.99
+   },
+   "comparator": ">=",
+   "provisional": {
+    "gpu": 0.98,
+    "cpu": 0.97,
+    "mps": 0.97
+   },
+   "observed_P0_5": {
+    "pooled": {
+     "gpu": 0.9951071542937627,
+     "cpu_linux": 0.9956134867183025,
+     "cpu_mac": 0.9956122507887623,
+     "mps": 0.995613606324387
+    },
+    "per_set": {
+     "gpu": {
+      "panel": 0.9955479474925906,
+      "enccheck": 0.9927507027116402,
+      "chains": 0.9943104756473092,
+      "tsub": 0.9949832859156886,
+      "a5t": 0.9927326531374535
+     },
+     "cpu_linux": {
+      "panel": 0.9960420146445985,
+      "enccheck": 0.9933362957451499,
+      "chains": 0.9948819345919453,
+      "tsub": 0.9954745838317975
+     },
+     "cpu_mac": {
+      "panel": 0.9960420585812061,
+      "enccheck": 0.993325961750441,
+      "chains": 0.9948784078450972,
+      "tsub": 0.9954730481948535
+     },
+     "mps": {
+      "panel": 0.9960424100740666,
+      "enccheck": 0.9933311287477954,
+      "chains": 0.9948806750394996,
+      "tsub": 0.9954751133617783
+     }
+    }
+   },
+   "decision": "TIGHTENED (gpu 0.98 -> 0.990, cpu/mps 0.97 -> 0.990)",
+   "reason": "(1) The provisional CPU value assumed CPU fp32 would sit further from the research bf16 codes than the GPU path; P0.5 shows the opposite (CPU/MPS 0.99561, GPU 0.99511 pooled over 50.2M bits). (2) At the provisional values the gate could not bind before the dlnE gate: dlnE on P_sub is driven by target-code flips (research q x device codes: median 0.048-0.049, P95 0.152-0.165; device q x research codes: median 0.009-0.010, P95 0.038-0.039), and its P95 grows roughly in proportion to the bit disagreement, so the dlnE P95 bound 0.5 (~3x observed) corresponds to ~1.4% disagreement; 0.990 (1.0%, 2.0-2.3x observed) keeps the two gates consistent. (3) Every P0.5 set clears it: the lowest are the 50,000 A5 targets on GPU (25,000 of them reversed decoys; 0.99273 over 1.02e9 bits) and the 50-item enc_check (GPU 0.99275, CPU 0.99334). The residual disagreement is mainly FoldMatch path vs research path (bf16-weight, batched SequenceOnlyESM3): FoldMatch GPU vs FoldMatch CPU agree to 0.99739 and CPU Mac vs CPU Linux to 0.99997."
+  },
+  {
+   "id": "A4-dlnE",
+   "metric": "dlnE",
+   "applies_to": [
+    "gpu",
+    "cpu",
+    "mps",
+    "mixed"
+   ],
+   "threshold": {
+    "median": 0.1,
+    "p95": 0.5
+   },
+   "comparator": "<=",
+   "provisional": {
+    "median": 0.1,
+    "p95": 0.5
+   },
+   "observed_P0_5": {
+    "gpu__gpu": {
+     "median": 0.050159409211859796,
+     "p95": 0.16683516748256988,
+     "p99": 0.23508015209068533,
+     "max": 0.3775206075204913
+    },
+    "gpu__cpu_linux": {
+     "median": 0.0496272626978449,
+     "p95": 0.16172560268137115,
+     "p99": 0.24084801281444967,
+     "max": 0.3846898978841331
+    },
+    "gpu__cpu_mac": {
+     "median": 0.0496272626978449,
+     "p95": 0.16334505892323836,
+     "p99": 0.24531730623196663,
+     "max": 0.3846898978841331
+    },
+    "gpu__mps": {
+     "median": 0.049953341178669675,
+     "p95": 0.1613092021670246,
+     "p99": 0.24307963964008014,
+     "max": 0.3846898978841331
+    },
+    "cpu_linux__gpu": {
+     "median": 0.04921047353915853,
+     "p95": 0.1700724533058291,
+     "p99": 0.23830574524182693,
+     "max": 0.3707528766306929
+    },
+    "cpu_linux__cpu_linux": {
+     "median": 0.04993678764566134,
+     "p95": 0.16016588503696605,
+     "p99": 0.23855277156353685,
+     "max": 0.3868905814739634
+    },
+    "cpu_linux__cpu_mac": {
+     "median": 0.049643751983140305,
+     "p95": 0.15995443768450013,
+     "p99": 0.24342781970062508,
+     "max": 0.3868905814739634
+    },
+    "cpu_linux__mps": {
+     "median": 0.05039912905912303,
+     "p95": 0.15868917435381924,
+     "p99": 0.23943520295189497,
+     "max": 0.3868905814739634
+    },
+    "cpu_mac__gpu": {
+     "median": 0.049359172542287055,
+     "p95": 0.1699947509865556,
+     "p99": 0.23813878689059592,
+     "max": 0.3704743491733762
+    },
+    "cpu_mac__cpu_linux": {
+     "median": 0.050008147630144606,
+     "p95": 0.16014980821372582,
+     "p99": 0.2387485474457406,
+     "max": 0.3871730748839717
+    },
+    "cpu_mac__cpu_mac": {
+     "median": 0.04966821516751718,
+     "p95": 0.1599206113610525,
+     "p99": 0.243469915374706,
+     "max": 0.3871730748839717
+    },
+    "cpu_mac__mps": {
+     "median": 0.050524655203063595,
+     "p95": 0.15874633093741242,
+     "p99": 0.23953617481845266,
+     "max": 0.3871730748839717
+    },
+    "mps__gpu": {
+     "median": 0.049240410562758186,
+     "p95": 0.17009277442905768,
+     "p99": 0.23830287106266043,
+     "max": 0.37052497473954205
+    },
+    "mps__cpu_linux": {
+     "median": 0.050014354604329014,
+     "p95": 0.16014338184472443,
+     "p99": 0.2386490163732991,
+     "max": 0.38717344380399155
+    },
+    "mps__cpu_mac": {
+     "median": 0.049799448761955745,
+     "p95": 0.16005684374556894,
+     "p99": 0.24348359258962682,
+     "max": 0.38717344380399155
+    },
+    "mps__mps": {
+     "median": 0.050577887984303516,
+     "p95": 0.1588034301595842,
+     "p99": 0.23942523324560158,
+     "max": 0.38717344380399155
+    }
+   },
+   "decision": "KEPT",
+   "reason": "Observed over all 16 device x device configs on P_sub (831 pairs): median 0.049-0.051, P95 0.159-0.170, P99 <= 0.245, max <= 0.387, i.e. 2x (median) and ~3x (P95) margin. The shipped table's own split-vs-all stability is max |dlnE| 0.47 at E = 1 (ship_final.json), so a P95 of 0.5 stays inside the calibration uncertainty; nothing in P0.5 argues for loosening, and tightening would only shrink the margin against GPU-model / library drift without catching a failure the A4-bits gate would miss."
+  },
+  {
+   "id": "A4-dF1",
+   "metric": "dF1",
+   "applies_to": [
+    "gpu",
+    "cpu",
+    "mps",
+    "mixed"
+   ],
+   "threshold": 0.01,
+   "comparator": "abs <=",
+   "provisional": 0.01,
+   "observed_P0_5": {
+    "cpu_linux__cpu_linux": {
+     "mean_f1": 0.6138242226449248,
+     "dF1": 0.00043143518771748823,
+     "ci_pairs": [
+      -0.0012138521200647028,
+      0.0021904344881218695
+     ]
+    },
+    "cpu_linux__gpu": {
+     "mean_f1": 0.6128293751603208,
+     "dF1": -0.0005634122968865007,
+     "ci_pairs": [
+      -0.0019492047205099867,
+      0.0007077568231087901
+     ]
+    },
+    "cpu_linux__research": {
+     "mean_f1": 0.6130530017022693,
+     "dF1": -0.00033978575493798235,
+     "ci_pairs": [
+      -0.0010753174863233426,
+      0.00020014990839064146
+     ]
+    },
+    "cpu_mac__cpu_mac": {
+     "mean_f1": 0.6138204767457933,
+     "dF1": 0.0004276892885860528,
+     "ci_pairs": [
+      -0.0012355907390770025,
+      0.0021831098449401234
+     ]
+    },
+    "cpu_mac__gpu": {
+     "mean_f1": 0.6128293751603208,
+     "dF1": -0.0005634122968865007,
+     "ci_pairs": [
+      -0.0019492047205099867,
+      0.0007077568231087901
+     ]
+    },
+    "cpu_mac__research": {
+     "mean_f1": 0.6130473866269148,
+     "dF1": -0.0003454008302924416,
+     "ci_pairs": [
+      -0.0010785621451676307,
+      0.0001945685739002196
+     ]
+    },
+    "gpu__cpu_linux": {
+     "mean_f1": 0.6136908114877958,
+     "dF1": 0.00029802403058853955,
+     "ci_pairs": [
+      -0.0013524941586159553,
+      0.0020056831532437873
+     ]
+    },
+    "gpu__cpu_mac": {
+     "mean_f1": 0.61379303291783,
+     "dF1": 0.00040024546062278343,
+     "ci_pairs": [
+      -0.0012488120279885938,
+      0.0021357262382264383
+     ]
+    },
+    "gpu__gpu": {
+     "mean_f1": 0.6125080387583455,
+     "dF1": -0.0008847486988617925,
+     "ci_pairs": [
+      -0.0023425756117670007,
+      0.00046869155154692437
+     ]
+    },
+    "gpu__mps": {
+     "mean_f1": 0.6136600954644744,
+     "dF1": 0.000267308007267153,
+     "ci_pairs": [
+      -0.0013781542011210542,
+      0.0020053498843865076
+     ]
+    },
+    "gpu__research": {
+     "mean_f1": 0.6130821446427672,
+     "dF1": -0.00031064281444004305,
+     "ci_pairs": [
+      -0.0010986365256489842,
+      0.0003077337413651178
+     ]
+    },
+    "mps__gpu": {
+     "mean_f1": 0.6128293751603208,
+     "dF1": -0.0005634122968865007,
+     "ci_pairs": [
+      -0.0019492047205099867,
+      0.0007077568231087901
+     ]
+    },
+    "mps__mps": {
+     "mean_f1": 0.6138018744053532,
+     "dF1": 0.0004090869481458981,
+     "ci_pairs": [
+      -0.0012437031312930924,
+      0.0021565291372997483
+     ]
+    },
+    "mps__research": {
+     "mean_f1": 0.6130473866269148,
+     "dF1": -0.0003454008302924416,
+     "ci_pairs": [
+      -0.0010785621451676307,
+      0.0001945685739002196
+     ]
+    }
+   },
+   "decision": "KEPT (read as two-sided |dF1|)",
+   "reason": "Observed |dF1| <= 0.00088 over 14 FoldMatch-path configs (pair-bootstrap 95% CIs within [-0.0023, +0.0022]); the research chain-set differences between SW settings it treated as material were >= 0.03 (B/C vs A), and setting D vs A was +0.005 (no cost). 0.01 has >10x margin and is not loosened; the provisional wording is read as two-sided because a shift of either sign beyond 0.01 would indicate a pipeline change, not ESM3 noise."
+  },
+  {
+   "id": "A4-xcpu",
+   "metric": "xcpu_bits",
+   "applies_to": [
+    "cpu"
+   ],
+   "threshold": 0.999,
+   "comparator": ">=",
+   "provisional": 0.995,
+   "observed_P0_5": {
+    "pooled": {
+     "cpu_mac_vs_cpu_linux": 0.9999665501650244,
+     "gpu_vs_cpu_linux": 0.9973848129615998,
+     "gpu_vs_cpu_mac": 0.9973849325676842,
+     "mps_vs_cpu_mac": 0.9999657527911275,
+     "mps_vs_cpu_linux": 0.9999653541041791,
+     "gpu_vs_mps": 0.9973845737494307
+    },
+    "per_item_min": {
+     "cpu_mac_vs_cpu_linux": 0.9995535714285714,
+     "gpu_vs_cpu_linux": 0.9801640070921985,
+     "gpu_vs_cpu_mac": 0.9801640070921985,
+     "mps_vs_cpu_mac": 0.99951171875,
+     "mps_vs_cpu_linux": 0.99951171875,
+     "gpu_vs_mps": 0.9800531914893617
+    }
+   },
+   "decision": "TIGHTENED (0.995 -> 0.999)",
+   "reason": "Observed CPU Mac (M1 Max, torch BLAS = Accelerate) vs CPU Linux (EPYC 7763, torch BLAS = MKL) 0.9999666 pooled over 50.2M bits (1,678 bits differ), worst item 0.99955 over 2,598 items; fp16 rows cosine >= 0.99999989 (rel. Frobenius 2.4e-5); MPS vs either CPU 0.99997. 0.995 would accept 150x the observed cross-machine disagreement (e.g. a CPU path with reduced-precision matmuls); 0.999 is 30x the pooled and 2.2x the worst per-item disagreement, so a correct fp32 CPU run on another machine is not expected to fail it on a pooled fixture (F2c)."
+  }
+ ],
+ "invariants": [
+  "every embedding finite; max |per_residue_embedding| < 65,504 (P0.5 max 16,795 on the A5 targets)",
+  "0 <unk> tokens and token count = L + 2 for every P0.5 input (498 A5 targets carry X/U/B)",
+  "a Q90 / lnE computed from research encodings reproduces bench_q90_shipped.npy and the research S_D matrices (P0.5: identical Q90; P_sub S max |d| 1e-4)"
+ ],
+ "reported_not_gated": {
+  "dQ90": {
+   "gpu.q200": {
+    "median": 0.040144300460814186,
+    "p95": 0.21043900728225742,
+    "max": 0.37191762924194904
+   },
+   "gpu.q200.own_panel_codes": {
+    "median": 0.09371100664138954,
+    "p95": 0.45894316673279684,
+    "max": 1.894903278350796
+   },
+   "gpu.a5q": {
+    "median": 0.033884572982788796,
+    "p95": 0.19507962226867614,
+    "max": 6.123225331306454
+   },
+   "gpu.a5q.own_panel_codes": {
+    "median": 0.08203508853912211,
+    "p95": 0.477057933807373,
+    "max": 6.125886273384097
+   },
+   "cpu_linux.q200": {
+    "median": 0.03475859165191686,
+    "p95": 0.2156229829788178,
+    "max": 0.387857532501215
+   },
+   "cpu_linux.q200.own_panel_codes": {
+    "median": 0.08828693628311157,
+    "p95": 0.446261427402495,
+    "max": 1.1229112625122042
+   },
+   "cpu_mac.q200": {
+    "median": 0.03578990697860851,
+    "p95": 0.21281309604644716,
+    "max": 0.39243078231811523
+   },
+   "cpu_mac.q200.own_panel_codes": {
+    "median": 0.09293643236160243,
+    "p95": 0.46997445821762257,
+    "max": 1.1824206352233944
+   },
+   "mps.q200": {
+    "median": 0.03585768938064682,
+    "p95": 0.2125476646423337,
+    "max": 0.3871936798095703
+   },
+   "mps.q200.own_panel_codes": {
+    "median": 0.09338387250900304,
+    "p95": 0.44880367994308473,
+    "max": 0.9392352104186728
+   }
+  },
+  "dQ90_largest_gpu_a5q": [
+   {
+    "id": "Q14691_1",
+    "length": 196,
+    "dQ90": 6.123225331306454,
+    "q90_research": 13.239169859886175,
+    "q_cos_median": 0.9568531183187527,
+    "q_cos_min": 0.7595264539790886
+   },
+   {
+    "id": "P03495_1",
+    "length": 237,
+    "dQ90": -1.5997482776641903,
+    "q90_research": 16.062467765808112,
+    "q_cos_median": 0.9989165566642207,
+    "q_cos_min": 0.958858932922288
+   },
+   {
+    "id": "Q9UNA4_1",
+    "length": 740,
+    "dQ90": -1.413989830017087,
+    "q90_research": 46.624850273132324,
+    "q_cos_median": 0.9997831425690409,
+    "q_cos_min": 0.9595918305073218
+   },
+   {
+    "id": "Q9Y692_1",
+    "length": 573,
+    "dQ90": 1.178971576690671,
+    "q90_research": 22.569289159774783,
+    "q_cos_median": 0.9999803156363559,
+    "q_cos_min": 0.995059157329748
+   },
+   {
+    "id": "P00860_1",
+    "length": 461,
+    "dQ90": -1.1566877365112163,
+    "q90_research": 107.18948516845703,
+    "q_cos_median": 0.9998057371159427,
+    "q_cos_min": 0.9778247328376385
+   }
+  ],
+  "q_cosine_median": {
+   "gpu": {
+    "enccheck": 0.9999324156978135,
+    "chains": 0.9999300160326534,
+    "q200": 0.9999546023962981,
+    "a5q": 0.9999558438034307
+   },
+   "cpu_linux": {
+    "enccheck": 0.9999487531518945,
+    "chains": 0.9999460163324446,
+    "q200": 0.9999633214186929
+   },
+   "cpu_mac": {
+    "enccheck": 0.9999486560744966,
+    "chains": 0.9999460207953159,
+    "q200": 0.9999633381551792
+   },
+   "mps": {
+    "enccheck": 0.9999487403598142,
+    "chains": 0.999946003463978,
+    "q200": 0.9999633360188523
+   }
+  },
+  "full_matrix_dlnE_gpu_a5": {
+   "research_hits": {
+    "n": 34866,
+    "median": 0.05035167939921514,
+    "p90": 0.13317918047481747,
+    "p95": 0.16449522519407433,
+    "p99": 0.24182936708964048,
+    "max": 1.501722156556454,
+    "mean": 0.06375384314849296,
+    "frac_gt_0_5": 0.0008604371020478403,
+    "frac_gt_1": 0.00020076865714449606
+   },
+   "union_hits": {
+    "n": 35188,
+    "median": 0.050627898190517495,
+    "p90": 0.1337440008193333,
+    "p95": 0.1650147049502543,
+    "p99": 0.24264783911651341,
+    "max": 3.342397442723147,
+    "mean": 0.06420398752448939,
+    "frac_gt_0_5": 0.0009094009321359554,
+    "frac_gt_1": 0.00025576901216323747
+   },
+   "hit_agreement": {
+    "1.0": {
+     "ref": 34866,
+     "config": 34905,
+     "both": 34583,
+     "ref_only": 283,
+     "config_only": 322,
+     "jaccard": 0.9828066386268046
+    },
+    "0.001": {
+     "ref": 7711,
+     "config": 7712,
+     "both": 7659,
+     "ref_only": 52,
+     "config_only": 53,
+     "jaccard": 0.9864760432766615
+    }
+   }
+  },
+  "a5_preview_heldout_union_fp_ratio": {
+   "research": {
+    "0.01": {
+     "fp": 36,
+     "ratio": 2.4573378839590445
+    },
+    "0.1": {
+     "fp": 160,
+     "ratio": 1.0921501706484642
+    },
+    "1.0": {
+     "fp": 1426,
+     "ratio": 0.9733788395904437
+    }
+   },
+   "gpu": {
+    "0.01": {
+     "fp": 38,
+     "ratio": 2.5938566552901023
+    },
+    "0.1": {
+     "fp": 163,
+     "ratio": 1.1126279863481228
+    },
+    "1.0": {
+     "fp": 1422,
+     "ratio": 0.9706484641638226
+    }
+   }
+  }
+ },
+ "on_failure": "Stop and report (plan G8). The remedy is the v2 refit (plan P0.5): re-encode the panel and the benchmark with FoldMatch, rerun ship.py / fit_final2.py unchanged, ship esm-codes-v2; v1 artefacts are never edited. A threshold is never relaxed to make A4 pass.",
+ "D18": "MPS meets every CPU gate in P0.5 (bits 0.99561, dlnE median 0.051 / P95 0.159, dF1 +0.0004; MPS vs CPU 0.99997) -> allow MPS. Condition: release the MPS allocator cache per protein (torch.mps.empty_cache); without it one process's footprint reached 83 GB after ~800 variable-length proteins (tsub + panel) on a 64 GB M1 Max, the machine swapped and throughput fell to ~40 res/s; with the per-protein release the driver memory stayed at 6.1-6.5 GiB and throughput was 700-900 res/s (Mac CPU fp32: 170-210). Mixed GPU/CPU/MPS use passes every mixed gate."
+}
