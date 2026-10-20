@@ -227,6 +227,20 @@ def hits_crosscheck(A9, inp, core):
     return out
 
 
+def g13_statement(smi, nv, qp):
+    """What the GPU jobs show about G13 (geometric attention off for sequence input): the device of each job (from its
+    nvidia-smi listing), its peak memory.used per GPU (nvidia-smi every 5 s) and the query passes' torch peaks."""
+    parts = []
+    for job, lines in smi.items():
+        devs = sorted({ln.split(",")[1].strip() for ln in lines[1:] if "," in ln})
+        peak = max(nv.get(job, {}).values()) if nv.get(job) else None
+        parts.append(f"{job}: {', '.join(devs)}, peak memory.used {peak} MiB per GPU")
+    q = "; ".join(f"query pass {k} on {v['gpu'].get('device')}: max length {v['max_len']} aa, torch peak allocated "
+                  f"{v['gpu'].get('peak_allocated_gib', float('nan')):.2f} GiB" for k, v in qp.items())
+    return ("Sequence input: FoldMatch's ESM3 pass runs with geometric attention off (G13), batch size 1. "
+            + " | ".join(parts) + " | " + q)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--gpu-dirs", nargs="+", required=True)
@@ -378,15 +392,13 @@ def main():
         query_pass={k: dict(n=v["n"], residues=v["residues"], max_len=v["max_len"], gpu=v["gpu"], wall_s=v["wall_s"],
                             residues_per_s=v["residues_per_s"], checks=v["checks"], ok=v["ok"])
                     for k, v in qp.items()},
-        g13="sequence input: FoldMatch's ESM3 pass runs with geometric attention off (G13). Every 1,000-3,000 aa item "
-            "(4,000 database targets, 2,019 queries > 966 aa, longest 3,000 aa) was encoded on A100-40GB at batch "
-            "size 1")
+        g13=g13_statement(smi, nv, qp))
     rec["verdict"] = dict(criterion_1=rec["criterion_1"]["verdict"], criterion_2=rec["criterion_2"]["verdict"],
                           A9="PASS" if (pass1 and pass2 and rec["reproduces_p07_on_research_scores"]["ok"]) else "FAIL",
                           gate_g8=("A9 passes: no stop" if pass1 else
                                    "A9 criterion (1) FAILS: Gate G8 stops this line of work (remedy: v2 refit or a "
                                    "D15 change with a new system name, never a parameter tweak)"))
-    rec["provenance"] = C.provenance(kernel=False)
+    rec["provenance"] = C.provenance()
     sha = C.write_json(rec, os.path.join(A9, "A9.json"))
 
     # ------------------------------------------------------------------ text summary
@@ -442,8 +454,8 @@ def main():
         f"{k[2:]} {v['cosine_median']:.5f}" for k, v in pv.items() if k.startswith("q_")) + "; |dlnE| median/P95 " +
         ", ".join(f"{k[7:]} {v['dlnE_median']:.3f}/{v['dlnE_p95']:.3f}" for k, v in pv.items()
                   if k.startswith("scores_") and v.get("dlnE_median") is not None))
-    first = next(iter(smi.values()))
-    L.append(f"GPU: {first[1] if len(first) > 1 else ''}; peak memory.used per GPU "
+    L.append(f"G13: {rec['gpu']['g13']}")
+    L.append(f"GPU: peak memory.used per GPU "
              f"(MiB) {nv}; query pass peak allocated (GiB): " + ", ".join(
                  f"{k} {v['gpu']['peak_allocated_gib']:.2f} (max len {v['max_len']})" for k, v in qp.items()))
     open(os.path.join(A9, "A9.txt"), "w").write("\n".join(L) + "\n")

@@ -114,7 +114,7 @@ def main():
     assert np.array_equal(arrays["db_ben_len"], ix["ben_len"]) and np.array_equal(arrays["nq_len"], ix["nq_len"])
     np.savez(os.path.join(out, "a9_inputs.npz"), **arrays)
     rec["a9_inputs_npz_md5"] = C.md5_file(os.path.join(out, "a9_inputs.npz"))
-    rec["provenance"] = C.provenance(kernel=False)
+    rec["provenance"] = C.provenance()
     sha = C.write_json(rec, os.path.join(out, "a9_inputs.json"))
     C.log("wrote", os.path.join(out, "a9_inputs.json"), sha)
 

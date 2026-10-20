@@ -43,7 +43,8 @@ def load_task(A9, task):
         recs.append(dict(dir=d, stage2_json_sha256=C.sha256_file(os.path.join(d, "stage2.json")),
                          scores_npz_sha256=r["files"]["scores_npz"], queries=r["queries"], N_db=r["N_db"],
                          system=r["system"], max_evalue=r["max_evalue"]))
-        zs.append(np.load(os.path.join(d, "scores.npz")))
+        z = np.load(os.path.join(d, "scores.npz"))
+        zs.append({k: z[k] for k in ("qrows", "S_f", "S_r", "lnE", "emb", "panel_f", "panel_r", "q90", "col_ids")})
     rows = np.concatenate([z["qrows"] for z in zs])
     nq = len(rows)
     assert np.array_equal(np.sort(rows), np.arange(nq)), f"{task}: parts do not cover the queries once"
@@ -145,8 +146,12 @@ def main():
     # code bits: the two production databases vs the research encodings
     stores = {"long": ResidueCodeStore.from_db_path(os.path.join(A9, "db/long/L")),
               "ben": ResidueCodeStore.from_db_path(os.path.join(A9, "db/ben/B"))}
-    ref_long = {k: np.load(C.inp(f"p0/long/enc/out/long_{k}.L2m_B8_s0.npz")) for k in ("t", "r")}
-    ref_bt = np.load(C.inp("embcomp/evalue/encode/out/targets.L2m_B8_s0.npz"))
+    def arrays(path, keys):          # read each npz member once (an NpzFile re-reads a member on every access)
+        z = np.load(path)
+        return {k: z[k] for k in keys}
+    ck = ("ids", "offsets", "lengths", "codes")
+    ref_long = {k: arrays(C.inp(f"p0/long/enc/out/long_{k}.L2m_B8_s0.npz"), ck) for k in ("t", "r")}
+    ref_bt = arrays(C.inp("embcomp/evalue/encode/out/targets.L2m_B8_s0.npz"), ck)
     for name, ids, refs in (("db_long", inp["db_long_ids"].astype(str), [ref_long["t"], ref_long["r"]]),
                             ("db_ben", inp["db_ben_ids"].astype(str), [ref_bt])):
         store = "long" if name == "db_long" else "ben"
@@ -161,8 +166,8 @@ def main():
             z, j = rpos[t]
             ro, rl = int(z["offsets"][j]), int(z["lengths"][j])
             assert rl == m, t
-            prod_rows.append(np.asarray(codes[o:o + m]))
-            ref_rows.append(z["codes"][ro:ro + m])
+            prod_rows.append(np.array(codes[o:o + m]))
+            ref_rows.append(z["codes"][ro:ro + m])          # a view of the array read once
             item.append(m)
         P, Rr = np.concatenate(prod_rows), np.concatenate(ref_rows)
         agree, per_res = bits_agreement(P, Rr)
@@ -178,8 +183,9 @@ def main():
                                         worst_item=float(per_item.min()), items_identical=int((per_item == 1).sum()),
                                         items=len(item))
     # query encodings q: production query pass vs the research encodings
-    for name, zref in (("lq", np.load(C.inp("p0/long/enc/out/long_q.L2m_B8_s0.npz"))),
-                       ("nq", np.load(C.inp("embcomp/evalue/encode/out/queries.L2m_B8_s0.npz")))):
+    qk = ("ids", "offsets", "q")
+    for name, zref in (("lq", arrays(C.inp("p0/long/enc/out/long_q.L2m_B8_s0.npz"), qk)),
+                       ("nq", arrays(C.inp("embcomp/evalue/encode/out/queries.L2m_B8_s0.npz"), qk))):
         ent = C.read_json(os.path.join(A9, "qpass", name, "entries.json"))
         mm = np.memmap(ent["path"], dtype=np.float16, mode="r", shape=(ent["rows"], ent["width"]))
         cos, same, n = [], 0, 0
@@ -233,7 +239,7 @@ def main():
     rec["production_vs_research"] = cmp
     rec["a4_thresholds_for_reference"] = "A4 gates (A4_THRESHOLDS.json): code bits >= 0.990, |dlnE| median <= 0.1, " \
                                          "P95 <= 0.5 (on P_sub hits); here informative only"
-    rec["provenance"] = C.provenance(kernel=False)
+    rec["provenance"] = C.provenance()
     sha = C.write_json(rec, os.path.join(A9, "merge.json"))
     C.log("merge", chk, {k: (v.get("agreement") or v.get("cosine_median") or v.get("dlnE_median"))
                          for k, v in cmp.items()}, "sha256", sha)

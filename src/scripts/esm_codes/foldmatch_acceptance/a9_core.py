@@ -112,7 +112,7 @@ def main():
         rec["reproduces_p07"] = (not cmp["numeric_or_structural_mismatches"]) and cmp["max_rel"] <= 1e-9
         C.log("compare with stored P0.7:", {k: v for k, v in rec["compare_with_stored_p07"].items()
                                             if k != "string_mismatch_examples"})
-    rec["provenance"] = C.provenance(kernel=False)
+    rec["provenance"] = C.provenance()
     sha = C.write_json(rec, os.path.join(A9, f"core_{a.source}.json"))
     C.log("wrote", os.path.join(A9, f"core_{a.source}.json"), sha)
 
