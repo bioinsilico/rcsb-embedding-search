@@ -47,6 +47,12 @@ DEFAULT_METHODS = ["foldmatch-esmcodes", "foldmatch-esmcodes-t08", "foldmatch-bl
 # folders <method>-full, e.g. mmseqs2-sen3-full) keep their method's label and style (pass --title for the full set)
 for _m in DEFAULT_METHODS:
     STYLE[f"{_m}-full"] = STYLE[_m]
+# the P8c long-sequence window emulation on the full set (fm-windows-v1, W 2,000 / S 1,000; folders
+# foldmatch-<scoring>-win[-t08]-full) keeps its scoring's colour and its threshold's line style and adds sparse
+# diamond markers, like the refine variants
+for _sc, (_name, _col) in {"esmcodes": ("esm-codes", "#1c5cab"), "blosum62": ("BLOSUM62", "#6da7ec")}.items():
+    for _t, (_tl, _ls) in {"": ("0.7", "-"), "-t08": ("0.8", "--")}.items():
+        STYLE[f"foldmatch-{_sc}-win{_t}-full"] = (f"FoldMatch {_name}, windows, threshold {_tl}", _col, _ls, 2.0, "D")
 PROTOCOL_NOTE = {
     "paper": "EvaluateResults as in the publication: first 4,000 hits, denominator min(family size, 4,000)",
     "spec": "whole hit list, denominator = all family members in the database",
