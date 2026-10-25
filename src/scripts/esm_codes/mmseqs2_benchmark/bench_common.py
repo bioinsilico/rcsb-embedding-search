@@ -23,6 +23,9 @@ Files (NERSC; override the root with BENCH_EVAL):
   /pscratch/sd/j/jsegura/embcomp/bench/eval/labels/   label store written by build_labels.py, read by auc1.py
   /pscratch/sd/j/jsegura/embcomp/bench/eval/<method>/ per-method AUC1 results
 Mac copy: /Users/joan/devel/foldmatch-p2p3-sandbox/bench/.
+Full set (the paper's exact data, sequences longer than 2,000 aa included: query.fasta 6,370 x targetdb.fasta
+30,430,281): the same scripts with BENCH_EVAL=/pscratch/sd/j/jsegura/embcomp/benchfull/eval and build_labels.py
+--query-fasta / --target-fasta; its 76 queries longer than 2,000 aa fall in the length bin '>2000'.
 """
 from __future__ import annotations
 
@@ -73,9 +76,10 @@ CLASS_E_RX = re.compile(r"^e\..*")                                  # evaluateRe
 PROP_RX_RESEARCH = re.compile(r"^b\.(67|68|69|70)\.")               # plan.py / acc_common (checked equal on vocab)
 ANN_PREFIX = b"annotated_"
 
-# query length bins: research EDGES (rlib / auc_final) extended to the lt2000 range
-LEN_EDGES = [0, 40, 60, 100, 200, 400, 1000, 2001]
-LEN_LABELS = ["0-40", "40-60", "60-100", "100-200", "200-400", "400-1000", "1000-2000"]
+# query length bins: research EDGES (rlib / auc_final) extended to the lt2000 range, and an open bin for the full set
+# (empty on query-lt2000: its summaries carry '>2000': {'n': 0})
+LEN_EDGES = [0, 40, 60, 100, 200, 400, 1000, 2001, 1 << 31]
+LEN_LABELS = ["0-40", "40-60", "60-100", "100-200", "200-400", "400-1000", "1000-2000", ">2000"]
 
 
 def log(*a):

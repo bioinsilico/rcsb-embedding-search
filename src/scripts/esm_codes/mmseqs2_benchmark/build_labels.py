@@ -1,7 +1,10 @@
 #!/usr/bin/env python
 """Labels of the full MMseqs2 benchmark (query-lt2000 x targetdb-lt2000) from the FASTA headers - NERSC CPU node.
 
-  python build_labels.py [--out DIR] [--md5] [--no-crosscheck]
+  python build_labels.py [--out DIR] [--md5] [--no-crosscheck] [--query-fasta F] [--target-fasta F] [--annot-fasta F]
+
+Full set (sequences longer than 2,000 aa included): --query-fasta .../db/query.fasta --target-fasta
+.../db/targetdb.fasta --out /pscratch/sd/j/jsegura/embcomp/benchfull/eval/labels (same rules, same annotation file).
 
 Reads query-lt2000.fasta (6,294 queries), targetannotation.fasta (the annotated sequences = the paper's db.fas, the
 evaluator's target FASTA) and streams targetdb-lt2000.fasta (30,308,746 entries). Rules: bench_common docstring
@@ -153,7 +156,8 @@ def main():
         if (k + 1) % 5_000_000 == 0:
             log(f"  targetdb: {k + 1} records")
     n_t = len(all_ids)
-    log(f"targetdb-lt2000: {n_t} records, {len(ann_db)} 'annotated_', {len(dec_ids)} other; max length {max_len}")
+    log(f"{os.path.basename(args.target_fasta)}: {n_t} records, {len(ann_db)} 'annotated_', {len(dec_ids)} other; "
+        f"max length {max_len}")
     all_kind = np.array(all_kind, np.int8)
 
     # ------------------------------------------------------------------ classify the annotated DB entries

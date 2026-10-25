@@ -43,6 +43,10 @@ for _sc, (_name, _col) in {"esm": ("esm-codes", "#1c5cab"), "blosum": ("BLOSUM62
             STYLE[f"fm-{_sc}-{_t}-{_v}"] = (f"FoldMatch {_name}, threshold {_tl}{_suffix}", _col, _ls, 2.0, _mk)
 DEFAULT_METHODS = ["foldmatch-esmcodes", "foldmatch-esmcodes-t08", "foldmatch-blosum62", "foldmatch-blosum62-t08",
                    "mmseqs2-sen3", "blast-k4000", "diamond"]
+# the full-set runs (the paper's exact data, query.fasta x targetdb.fasta, sequences longer than 2,000 aa included;
+# folders <method>-full, e.g. mmseqs2-sen3-full) keep their method's label and style (pass --title for the full set)
+for _m in DEFAULT_METHODS:
+    STYLE[f"{_m}-full"] = STYLE[_m]
 PROTOCOL_NOTE = {
     "paper": "EvaluateResults as in the publication: first 4,000 hits, denominator min(family size, 4,000)",
     "spec": "whole hit list, denominator = all family members in the database",
