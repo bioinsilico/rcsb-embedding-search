@@ -259,6 +259,10 @@ class PackedEmbeddingStore:
     def __len__(self):
         return len(self._offset)
 
+    def length(self, domain):
+        """Number of rows stored for ``domain``."""
+        return self._length[domain]
+
     def _ensure_mm(self):
         # Re-open after fork: a memmap fd shared across fork is unsafe.
         if self._mm is None or self._mm_pid != os.getpid():

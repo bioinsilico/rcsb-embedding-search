@@ -148,6 +148,11 @@ def collate_fn(tuple_list):
     )
 
 
+def collate_meta_fn(tuple_list):
+    """:func:`collate_fn` for ``(x, y, label, meta)`` items; meta tensors are stacked."""
+    return (*collate_fn([item[:3] for item in tuple_list]), torch.stack([item[3] for item in tuple_list]))
+
+
 def collate_dual_fn(tuple_list):
     return (
         collate_seq_embeddings([x for x, y, z in tuple_list]),
